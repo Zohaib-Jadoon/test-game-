@@ -61,7 +61,7 @@ test('generateBlenderAddonScript outputs valid Blender add-on and escapes unsafe
     token: 'tok_secret_value',
   });
 
-  assert.match(script, /"name": "Skyforge Arena Live Bridge"/);
+  assert.match(script, /"name": "EIDRATH Live Blender Bridge"/);
   assert.match(script, /default="https:\/\/arena\.example\.com"/);
   assert.match(script, /default="abc123session"/);
   assert.match(script, /\/api\/blender-bridge\/\{session_id\}\/push/);

@@ -92,7 +92,7 @@ function getGeminiClient() {
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
-    service: 'skyforge-arena',
+    service: 'eidrath-the-last-oath',
     dbConfigured: isSqlConfigured(),
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
     timestamp: new Date().toISOString(),
@@ -489,7 +489,7 @@ async function startServer() {
   }
 
   app.listen(port, '0.0.0.0', () => {
-    console.log(`Skyforge Arena server listening on http://0.0.0.0:${port}`);
+    console.log(`EIDRATH: The Last Oath server listening on http://0.0.0.0:${port}`);
   });
 }
 

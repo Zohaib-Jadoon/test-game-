@@ -1,6 +1,6 @@
 {
-  "name": "Skyforge Arena",
-  "description": "3D indie mobile & desktop action-arena game with Blender GLTF/FBX custom character import, local 2-player multiplayer, real-time Firebase leaderboards, E2EE social chat, Cloud SQL cross-platform saves, offline PWA support, and Gemini tactical coaching.",
+  "name": "EIDRATH: The Last Oath",
+  "description": "Original third-person open-world dark-fantasy action RPG built with Three.js, React, TypeScript, and Blender 5.3 original assets. Explore Frostheim, master deliberate combat, forge Oathbreaker, and confront the Mountain Warden.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

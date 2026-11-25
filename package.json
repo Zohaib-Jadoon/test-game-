@@ -1,16 +1,16 @@
 {
-  "name": "react-example",
+  "name": "eidrath-the-last-oath",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "node server.ts",
+    "start": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/game/rules.test.ts src/game/assetLoader.test.ts src/utils/crypto.test.ts src/utils/blenderBridge.test.ts"
+    "test": "tsx --test src/game/eidrath.test.ts src/utils/crypto.test.ts src/utils/blenderBridge.test.ts"
   },
   "dependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",

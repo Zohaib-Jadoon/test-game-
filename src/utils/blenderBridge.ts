@@ -82,7 +82,7 @@ export function sanitizePythonString(value: string): string {
 
 /**
  * Generates a self-contained Blender 3.6 – 5.x Python add-on (.py) that connects
- * Blender directly to this Skyforge Arena instance via authenticated HTTP POST.
+ * Blender directly to this EIDRATH: The Last Oath instance via authenticated HTTP POST.
  */
 export function generateBlenderAddonScript(config: BlenderAddonConfig): string {
   const safeUrl = sanitizePythonString(config.serverUrl.replace(/\/+$/, ''));
@@ -90,12 +90,12 @@ export function generateBlenderAddonScript(config: BlenderAddonConfig): string {
   const safeToken = sanitizePythonString(config.token);
 
   return `bl_info = {
-    "name": "Skyforge Arena Live Bridge",
-    "author": "Skyforge Arena",
-    "version": (1, 1, 0),
+    "name": "EIDRATH Live Blender Bridge",
+    "author": "EIDRATH: The Last Oath",
+    "version": (2, 0, 0),
     "blender": (3, 6, 0),
-    "location": "View3D > Sidebar (N) > Skyforge",
-    "description": "Export and live-sync Blender 3.6-5.x character rigs (.glb) directly into Skyforge Arena.",
+    "location": "View3D > Sidebar (N) > EIDRATH",
+    "description": "Export and live-sync Blender 3.6-5.x EIDRATH assets (.glb) directly into EIDRATH: The Last Oath.",
     "category": "Import-Export",
 }
 
@@ -110,17 +110,17 @@ from bpy.app.handlers import persistent
 class SkyforgeBridgeSettings(bpy.types.PropertyGroup):
     server_url: bpy.props.StringProperty(
         name="Server URL",
-        description="Skyforge Arena URL",
+        description="EIDRATH Server URL",
         default="${safeUrl}",
     )
     session_id: bpy.props.StringProperty(
         name="Session ID",
-        description="Active Skyforge Live Bridge Session ID",
+        description="Active EIDRATH Live Bridge Session ID",
         default="${safeSession}",
     )
     bridge_token: bpy.props.StringProperty(
         name="Bridge Token",
-        description="Temporary Skyforge Live Bridge Bearer Token",
+        description="Temporary EIDRATH Live Bridge Bearer Token",
         default="${safeToken}",
         subtype="PASSWORD",
     )
@@ -131,7 +131,7 @@ class SkyforgeBridgeSettings(bpy.types.PropertyGroup):
     )
     auto_sync_on_save: bpy.props.BoolProperty(
         name="Auto-Sync on Save (Ctrl+S)",
-        description="Automatically push .glb to Skyforge Arena whenever you save this .blend file",
+        description="Automatically push .glb to EIDRATH whenever you save this .blend file",
         default=False,
     )
     last_status: bpy.props.StringProperty(

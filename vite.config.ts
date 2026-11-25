@@ -15,12 +15,12 @@ export default defineConfig(() => {
         includeAssets: ['icon.svg', 'apple-touch-icon.png'],
         manifest: {
           id: '/',
-          name: 'Skyforge Arena — 3D Indie Action Game',
-          short_name: 'Skyforge',
+          name: 'EIDRATH: The Last Oath',
+          short_name: 'EIDRATH',
           description:
-            '3D indie mobile & desktop action-arena game with Blender GLTF/FBX rigs, local multiplayer, real-time leaderboards, E2EE chat, and offline cloud sync.',
-          theme_color: '#1b2638',
-          background_color: '#121824',
+            'Original third-person open-world dark-fantasy action RPG in Frostheim with deliberate combat, quests, crafting, and offline saves.',
+          theme_color: '#22272B',
+          background_color: '#171b1e',
           display: 'fullscreen',
           start_url: '/',
           scope: '/',
@@ -46,11 +46,13 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          cacheId: 'eidrath-v1',
+          cleanupOutdatedCaches: true,
           globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,glb,gltf,woff,woff2}'],
-          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         },
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: 'module',
         },
       }),

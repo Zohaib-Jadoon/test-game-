@@ -1,785 +1,309 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { validateEidrathContent } from './content/eidrathContent';
+import { DialogueOverlay } from './components/DialogueOverlay';
+import { EidrathHud } from './components/EidrathHud';
+import { EidrathTitleScreen } from './components/EidrathTitleScreen';
+import { RpgMenus, type RpgMenuTab } from './components/RpgMenus';
+import { BlenderDevDrawer } from './components/dev/BlenderDevDrawer';
+import { EidrathEngine } from './game/core/EidrathEngine';
 import {
-  SkyforgeEngine,
-  type HudSnapshot,
-  type TelemetrySample,
-} from './game/SkyforgeEngine';
-import type { GameMode } from './game/rules';
-import { BUILTIN_RIGS, type BuiltinRigId } from './game/proceduralModels';
-import type { ImportedAssetSummary, LoadedCustomRig } from './game/assetLoader';
-import {
-  auth,
-  SEEDED_LEADERBOARD,
-  sendFirestoreEncryptedMessage,
-  signInWithGoogle,
-  signOutPlayer,
-  submitLeaderboardScore,
-  subscribeLeaderboard,
-  syncFirestoreProfileAndSave,
-  type LeaderboardRecord,
-} from './lib/firebase';
-import {
-  enqueueOfflineItem,
-  generateE2EEKeyPair,
-  mergePlayerProgress,
-  type OfflineSyncItem,
-  type PlayerProgress,
-  type SerializedKeyPair,
-} from './utils/crypto';
-import { TRANSLATIONS, type Locale } from './utils/i18n';
-import { INITIAL_CHALLENGES, sendLocalAlert, type DailyChallenge } from './utils/notifications';
-import { useOnlineStatus } from './hooks/usePWAInstall';
-import { TitleOverlay } from './components/TitleOverlay';
-import { GameHud } from './components/GameHud';
-import { StatusModals } from './components/StatusModals';
-import { CitadelHub, type HubTab } from './components/CitadelHub';
-import type { CloudBackupRow } from './components/hub/CloudSecurityTab';
-
-const LOCAL_PROGRESS_KEY = 'skyforge_progress_v1';
-const LOCAL_QUEUE_KEY = 'skyforge_offline_queue_v1';
-const LOCAL_E2EE_KEY = 'skyforge_e2ee_keys_v1';
-const LOCAL_PREFS_KEY = 'skyforge_prefs_v1';
-
-function loadLocalPrefs(): { locale: Locale; darkMode: boolean } {
-  try {
-    const raw = localStorage.getItem(LOCAL_PREFS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { locale?: Locale; darkMode?: boolean };
-      const locale =
-        parsed.locale && parsed.locale in TRANSLATIONS ? parsed.locale : 'en';
-      return {
-        locale,
-        darkMode: typeof parsed.darkMode === 'boolean' ? parsed.darkMode : true,
-      };
-    }
-  } catch {
-    // ignore storage errors
-  }
-  return { locale: 'en', darkMode: true };
-}
-
-function detectPlatform(): 'mobile' | 'tablet' | 'desktop' {
-  if (typeof window === 'undefined') return 'desktop';
-  const w = window.innerWidth;
-  if (w < 640) return 'mobile';
-  if (w < 1024) return 'tablet';
-  return 'desktop';
-}
-
-function loadLocalProgress(): PlayerProgress {
-  try {
-    const raw = localStorage.getItem(LOCAL_PROGRESS_KEY);
-    if (raw) return JSON.parse(raw) as PlayerProgress;
-  } catch {
-    // ignore storage errors
-  }
-  return {
-    highestWave: 1,
-    bestScore: 0,
-    totalKills: 0,
-    preferredRig: 'ranger',
-    updatedAt: Date.now(),
-  };
-}
-
-function loadOfflineQueue(): OfflineSyncItem[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_QUEUE_KEY);
-    if (raw) return JSON.parse(raw) as OfflineSyncItem[];
-  } catch {
-    // ignore
-  }
-  return [];
-}
+  createDefaultSettings,
+  createNewGameSave,
+  getMostRecentSave,
+  listSaveSlots,
+  loadGameSettings,
+  saveGameSettings,
+  type SaveSlotId,
+} from './game/save/saveSystem';
+import type { GameSettings, HudSnapshot, SaveGame } from './game/types';
 
 const INITIAL_HUD: HudSnapshot = {
-  phase: 'title',
-  mode: 'solo',
-  cameraMode: 'fps',
-  pointerLocked: false,
-  hitmarker: 'none',
-  sprinting: false,
-  grounded: true,
-  speed: 0,
-  wave: 1,
-  maxWaves: 5,
-  score: 0,
-  combo: 0,
-  kills: 0,
-  elapsedSec: 0,
-  p1Hp: 5,
-  p1MaxHp: 5,
-  p1Energy: 60,
-  p2Active: false,
-  p2Hp: 5,
-  p2MaxHp: 5,
-  p2Score: 0,
-  winnerLabel: '',
-  enemiesRemaining: 0,
-  bannerText: '',
+  mode: 'title',
+  regionLabel: 'Frostheim — Oathgrave Tomb',
+  landmarkBanner: '',
+  notificationText: '',
+  subtitleText: '',
+  hp: 100,
+  maxHp: 100,
+  stamina: 100,
+  maxStamina: 100,
+  mana: 80,
+  maxMana: 80,
+  divineMeter: 0,
+  ascensionRemainingSec: 0,
+  actionState: 'idle',
+  inCombat: false,
+  stealthState: 'hidden',
+  stealthEyePct: 0,
+  lockedTargetName: null,
+  lockedTargetHpPct: 0,
+  lockedTargetPoisePct: 0,
+  incomingCue: 'none',
+  parryFlashSec: 0,
+  damageFlashSec: 0,
   cameraHeadingRad: 0,
-  wordWallBearingRad: 0,
-  enemyBearingsRad: [],
+  waypointBearingRad: null,
+  waypointDistanceM: null,
+  waypointLabel: null,
+  enemyBlips: [],
+  interactPrompt: null,
+  trackedQuestTitle: null,
+  trackedObjectiveText: null,
+  boss: null,
+  companionName: null,
+  companionCommand: 'assist',
+  companionHpPct: 100,
+  equippedWeaponName: 'Unarmed',
+  potionCount: 3,
+  manaPotionCount: 2,
+  abilityCooldowns: [0, 0, 0, 0],
+  worldTimeHours: 8.5,
+  weather: 'snow',
+  playerX: -145,
+  playerZ: 145,
+  level: 1,
+  xp: 0,
+  nextLevelXp: 120,
+  gold: 55,
+  skillPoints: 2,
+  pointerLocked: false,
+  fps: 60,
+  drawCalls: 0,
 };
 
-export default function App() {
-  const canvasMountRef = useRef<HTMLDivElement | null>(null);
-  const engineRef = useRef<SkyforgeEngine | null>(null);
+export function App() {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const engineRef = useRef<EidrathEngine | null>(null);
 
   const [hud, setHud] = useState<HudSnapshot>(INITIAL_HUD);
-  const [selectedMode, setSelectedMode] = useState<GameMode>('solo');
-  const [muted, setMuted] = useState(false);
-  const [hubOpen, setHubOpen] = useState(false);
-  const [hubTab, setHubTab] = useState<HubTab>('leaderboard');
-
-  const [initialPrefs] = useState(() => loadLocalPrefs());
-  const [locale, setLocale] = useState<Locale>(initialPrefs.locale);
-  const [darkMode, setDarkMode] = useState(initialPrefs.darkMode);
-  const [activeRigId, setActiveRigId] = useState<BuiltinRigId>('ranger');
-  const [builtinRigSummary, setBuiltinRigSummary] = useState<ImportedAssetSummary | null>(null);
-  const [customRigSummary, setCustomRigSummary] = useState<ImportedAssetSummary | null>(null);
-  const [customPropSummary, setCustomPropSummary] = useState<ImportedAssetSummary | null>(null);
-  const [customEnemySummary, setCustomEnemySummary] = useState<ImportedAssetSummary | null>(null);
-
-  const [user, setUser] = useState<User | null>(null);
-  const [ownKeys, setOwnKeys] = useState<SerializedKeyPair | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardRecord[]>(SEEDED_LEADERBOARD);
-  const [progress, setProgress] = useState<PlayerProgress>(() => loadLocalProgress());
-  const [offlineQueue, setOfflineQueue] = useState<OfflineSyncItem[]>(() => loadOfflineQueue());
-  const [backups, setBackups] = useState<CloudBackupRow[]>([]);
-  const [syncStatus, setSyncStatus] = useState('Local Cache Ready');
-  const [challenges, setChallenges] = useState<DailyChallenge[]>(INITIAL_CHALLENGES);
-
-  const [telemetry, setTelemetry] = useState<TelemetrySample>({
-    fps: 60,
-    frameMs: 16.6,
-    drawCalls: 24,
-    triangles: 4800,
-    isSoftwareGl: false,
+  const [settings, setSettings] = useState<GameSettings>(() => {
+    try {
+      return loadGameSettings();
+    } catch {
+      return createDefaultSettings();
+    }
   });
-  const [fpsHistory, setFpsHistory] = useState<number[]>(() => Array(16).fill(60));
-  const [telemetryFeedback, setTelemetryFeedback] = useState<string | null>(null);
+  const [save, setSave] = useState<SaveGame>(() => getMostRecentSave() ?? createNewGameSave('autosave'));
+  const [allSaves, setAllSaves] = useState<Array<{ slotId: SaveSlotId; save: SaveGame | null }>>(() =>
+    listSaveSlots(),
+  );
+  const [dialogueNodeId, setDialogueNodeId] = useState<string | null>(null);
+  const [menuTab, setMenuTab] = useState<RpgMenuTab | null>(null);
+  const [devBlenderOpen, setDevBlenderOpen] = useState(false);
+  const [bootError, setBootError] = useState<string | null>(null);
 
-  const isOnline = useOnlineStatus();
-  const t = TRANSLATIONS[locale];
-
-  // Keep latest mutable refs for isolated WebGL engine callbacks
-  const userRef = useRef<User | null>(null);
-  const progressRef = useRef<PlayerProgress>(progress);
-  const onlineRef = useRef<boolean>(isOnline);
-  const keysRef = useRef<SerializedKeyPair | null>(ownKeys);
-  const localeRef = useRef<Locale>(locale);
-  const darkModeRef = useRef<boolean>(darkMode);
-
-  userRef.current = user;
-  progressRef.current = progress;
-  onlineRef.current = isOnline;
-  keysRef.current = ownKeys;
-  localeRef.current = locale;
-  darkModeRef.current = darkMode;
-
-  // Persist local progress and queue
-  useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_PROGRESS_KEY, JSON.stringify(progress));
-    } catch {
-      // ignore
-    }
-  }, [progress]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_QUEUE_KEY, JSON.stringify(offlineQueue));
-    } catch {
-      // ignore
-    }
-  }, [offlineQueue]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_PREFS_KEY, JSON.stringify({ locale, darkMode }));
-    } catch {
-      // ignore
-    }
-  }, [locale, darkMode]);
-
-  // Initialize persistent Web Crypto ECDH P-256 identity keypair
-  useEffect(() => {
-    let mounted = true;
-    async function initKeys() {
-      try {
-        const cached = localStorage.getItem(LOCAL_E2EE_KEY);
-        if (cached) {
-          if (mounted) setOwnKeys(JSON.parse(cached) as SerializedKeyPair);
-          return;
-        }
-      } catch {
-        // ignore
-      }
-      const generated = await generateE2EEKeyPair();
-      try {
-        localStorage.setItem(LOCAL_E2EE_KEY, JSON.stringify(generated));
-      } catch {
-        // ignore
-      }
-      if (mounted) setOwnKeys(generated);
-    }
-    void initKeys();
-    return () => {
-      mounted = false;
-    };
+  const refreshSlots = useCallback(() => {
+    setAllSaves(listSaveSlots());
   }, []);
 
-  // Fetch Cloud SQL backups helper
-  const fetchSqlBackups = useCallback(async (u: User) => {
+  useEffect(() => {
+    const check = validateEidrathContent();
+    if (!check.valid) {
+      setBootError(`Content validation failed: ${check.errors.join('; ')}`);
+      return;
+    }
+
+    const container = viewportRef.current;
+    if (!container) return;
+
     try {
-      const token = await u.getIdToken();
-      const res = await fetch('/api/saves', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { backups?: CloudBackupRow[] };
-        if (Array.isArray(data.backups)) {
-          setBackups(data.backups);
-          if (data.backups.length > 0) {
-            const latest = data.backups[0];
-            setProgress((prev) =>
-              mergePlayerProgress(prev, {
-                highestWave: latest.highestWave,
-                bestScore: latest.bestScore,
-                totalKills: latest.totalKills,
-                preferredRig: prev.preferredRig,
-                updatedAt: new Date(latest.createdAt).getTime() || Date.now(),
-              }),
-            );
-          }
-        }
-      }
-    } catch {
-      // Graceful offline isolation
+      const engine = new EidrathEngine(
+        container,
+        {
+          onHudUpdate: (snap) => setHud(snap),
+          onDialogueOpen: (nodeId) => setDialogueNodeId(nodeId),
+          onSaveChanged: (updated) => {
+            setSave(updated);
+            refreshSlots();
+          },
+          onOpenSpecialUi: (ui) => {
+            setMenuTab(ui);
+          },
+        },
+        settings,
+      );
+      engineRef.current = engine;
+      return () => {
+        engine.dispose();
+        engineRef.current = null;
+      };
+    } catch (err) {
+      setBootError(err instanceof Error ? err.message : 'WebGL initialization failed.');
     }
   }, []);
 
-  // Sync cross-platform save to BOTH Cloud SQL and Firestore
-  const performCloudSync = useCallback(
-    async (isAutoBackup: boolean, overrideProgress?: PlayerProgress) => {
-      const activeUser = userRef.current;
-      const snap = overrideProgress ?? progressRef.current;
-      const platform = detectPlatform();
-      const deviceName = `${platform.toUpperCase()} · ${navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'}`;
+  const handleUpdateSettings = useCallback((next: GameSettings) => {
+    setSettings(next);
+    saveGameSettings(next);
+    engineRef.current?.setSettings(next);
+  }, []);
 
-      if (!activeUser || !onlineRef.current) {
-        setOfflineQueue((q) =>
-          enqueueOfflineItem(q, {
-            id: `save_${Date.now()}`,
-            kind: 'save',
-            payload: { ...snap, isAutoBackup },
-            createdAt: Date.now(),
-          }),
-        );
-        setSyncStatus(activeUser ? 'Queued Offline' : 'Saved Locally (Sign in for Cloud Sync)');
+  const openMenu = useCallback((tab: RpgMenuTab) => {
+    setMenuTab(tab);
+    if (engineRef.current && hud.mode !== 'title') {
+      engineRef.current.setPaused(true, true);
+    }
+  }, [hud.mode]);
+
+  const closeMenu = useCallback(() => {
+    setMenuTab(null);
+    if (engineRef.current && hud.mode !== 'title') {
+      engineRef.current.setPaused(false, false);
+    }
+  }, [hud.mode]);
+
+  // Global menu hotkeys (I / K / M / J / Esc)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (devBlenderOpen) return;
+
+      if (e.code === 'Escape') {
+        if (menuTab) {
+          e.preventDefault();
+          closeMenu();
+        } else if (hud.mode === 'playing') {
+          e.preventDefault();
+          engineRef.current?.setPaused(true, false);
+        } else if (hud.mode === 'paused') {
+          e.preventDefault();
+          engineRef.current?.setPaused(false, false);
+        }
         return;
       }
 
-      setSyncStatus('Syncing...');
-      try {
-        const token = await activeUser.getIdToken();
-        const sqlRes = await fetch('/api/saves', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            deviceName,
-            platform,
-            highestWave: snap.highestWave,
-            bestScore: snap.bestScore,
-            totalKills: snap.totalKills,
-            unlockedRigs: ['vanguard', 'sentinel', 'ronin'],
-            settings: { locale: localeRef.current, darkMode: darkModeRef.current },
-            isAutoBackup,
-          }),
-        });
+      if (hud.mode === 'title' || hud.mode === 'dead' || dialogueNodeId) return;
 
-        if (activeUser.emailVerified && keysRef.current) {
-          await syncFirestoreProfileAndSave({
-            user: activeUser,
-            publicKeyJwk: keysRef.current.publicKeyJwk,
-            highestWave: snap.highestWave,
-            bestScore: snap.bestScore,
-            totalKills: snap.totalKills,
-            preferredRig: snap.preferredRig,
-            locale: localeRef.current,
-            darkMode: darkModeRef.current,
-            biometricEnabled: false,
-            notificationsEnabled: false,
-            deviceName,
-            platform,
-          }).catch(() => {});
-        }
-
-        if (sqlRes.ok) {
-          await fetchSqlBackups(activeUser);
-          setSyncStatus(isAutoBackup ? 'Cloud Backup Created' : 'Synced to Cloud SQL & Firestore');
-        } else {
-          setSyncStatus('Synced to Local Cache');
-        }
-      } catch {
-        setSyncStatus('Offline — Queued');
-      }
-    },
-    [fetchSqlBackups],
-  );
-
-  // Firebase Auth listener & real-time leaderboard subscription
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u) {
-        try {
-          const token = await u.getIdToken();
-          await fetch('/api/profile/sync', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ displayName: u.displayName, photoUrl: u.photoURL }),
-          });
-          await fetchSqlBackups(u);
-          setSyncStatus('Cloud Profile Connected');
-        } catch {
-          setSyncStatus('Offline Profile Active');
-        }
-      }
-    });
-
-    const unsubBoard = subscribeLeaderboard(
-      (rows) => setLeaderboard(rows),
-      () => {
-        // Fallback smoothly to seeded champions when offline or unconfigured
-        setLeaderboard(SEEDED_LEADERBOARD);
-      },
-    );
-
-    return () => {
-      unsubAuth();
-      unsubBoard();
-    };
-  }, [fetchSqlBackups]);
-
-  // Flush offline queue automatically when back online, replaying saves, scores, and E2EE messages
-  const offlineQueueRef = useRef(offlineQueue);
-  offlineQueueRef.current = offlineQueue;
-  const flushInFlightRef = useRef(false);
-
-  useEffect(() => {
-    if (!isOnline || !user || offlineQueueRef.current.length === 0 || flushInFlightRef.current) {
-      return;
-    }
-    flushInFlightRef.current = true;
-    let cancelled = false;
-    void (async () => {
-      const snapshot = [...offlineQueueRef.current];
-      const remaining: OfflineSyncItem[] = [];
-      let needsSaveSync = false;
-      const token = await user.getIdToken().catch(() => null);
-
-      for (const item of snapshot) {
-        if (cancelled) break;
-        try {
-          if (item.kind === 'save') {
-            needsSaveSync = true;
-          } else if (item.kind === 'score') {
-            const score = Number(item.payload.score) || 0;
-            const wave = Number(item.payload.wave) || 1;
-            const kills = Number(item.payload.kills) || 0;
-            const mode = (item.payload.mode as GameMode) || 'solo';
-            const rigUsed = String(item.payload.rigUsed || 'ranger');
-            if (user.emailVerified && score > 0) {
-              await submitLeaderboardScore({ user, score, wave, kills, mode, rigUsed });
-            }
-            if (token) {
-              await fetch('/api/matches', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify(item.payload),
-              });
-            }
-            needsSaveSync = true;
-          } else if (item.kind === 'message') {
-            if (
-              user.emailVerified &&
-              typeof item.payload.recipientUid === 'string' &&
-              typeof item.payload.ciphertext === 'string' &&
-              typeof item.payload.iv === 'string' &&
-              typeof item.payload.senderPublicKey === 'string'
-            ) {
-              await sendFirestoreEncryptedMessage({
-                user,
-                recipientUid: item.payload.recipientUid,
-                ciphertext: item.payload.ciphertext,
-                iv: item.payload.iv,
-                senderPublicKey: item.payload.senderPublicKey,
-              });
-            }
-          }
-        } catch {
-          remaining.push(item);
-        }
-      }
-
-      if (!cancelled) {
-        if (needsSaveSync) {
-          await performCloudSync(true);
-        }
-        if (remaining.length !== snapshot.length) {
-          setOfflineQueue(remaining);
-        }
-      }
-      flushInFlightRef.current = false;
-    })();
-    return () => {
-      cancelled = true;
-      flushInFlightRef.current = false;
-    };
-  }, [isOnline, user, performCloudSync]);
-
-  // Mount isolated 3D WebGL engine ONCE
-  const handleRunCompleteRef = useRef<
-    (summary: {
-      outcome: 'victory' | 'defeat';
-      score: number;
-      wave: number;
-      kills: number;
-      durationSec: number;
-      mode: GameMode;
-      rigUsed: string;
-    }) => void
-  >(() => {});
-
-  handleRunCompleteRef.current = (summary) => {
-    const nextProgress: PlayerProgress = {
-      highestWave: Math.max(progressRef.current.highestWave, summary.wave),
-      bestScore: Math.max(progressRef.current.bestScore, summary.score),
-      totalKills: progressRef.current.totalKills + summary.kills,
-      preferredRig: progressRef.current.preferredRig,
-      updatedAt: Date.now(),
-    };
-    setProgress(nextProgress);
-
-    // Update local leaderboard immediately even while offline
-    if (summary.score > 0) {
-      const localRow: LeaderboardRecord = {
-        id: `local_${Date.now()}`,
-        uid: userRef.current?.uid || 'local-pilot',
-        displayName: userRef.current?.displayName || 'You (Local)',
-        score: summary.score,
-        wave: summary.wave,
-        kills: summary.kills,
-        mode: summary.mode,
-        rigUsed: summary.rigUsed,
-        isLive: Boolean(userRef.current && onlineRef.current),
+      const mapCode: Record<string, RpgMenuTab> = {
+        KeyI: 'inventory',
+        KeyK: 'skills',
+        KeyM: 'map',
+        KeyJ: 'journal',
       };
-      setLeaderboard((prev) =>
-        [localRow, ...prev].sort((a, b) => b.score - a.score).slice(0, 20),
-      );
-    }
-
-    // Cloud persistence: Firestore real-time leaderboard + Cloud SQL match history + auto-backup
-    const u = userRef.current;
-    if (u && onlineRef.current) {
-      void (async () => {
-        try {
-          if (u.emailVerified && summary.score > 0) {
-            await submitLeaderboardScore({
-              user: u,
-              score: summary.score,
-              wave: summary.wave,
-              kills: summary.kills,
-              mode: summary.mode,
-              rigUsed: summary.rigUsed,
-            }).catch(() => {});
-          }
-          const token = await u.getIdToken();
-          await fetch('/api/matches', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(summary),
-          });
-          await performCloudSync(true, nextProgress);
-        } catch {
-          // Queue offline
-          setOfflineQueue((q) =>
-            enqueueOfflineItem(q, {
-              id: `score_${Date.now()}`,
-              kind: 'score',
-              payload: summary as unknown as Record<string, unknown>,
-              createdAt: Date.now(),
-            }),
-          );
-        }
-      })();
-    } else {
-      setOfflineQueue((q) =>
-        enqueueOfflineItem(q, {
-          id: `score_${Date.now()}`,
-          kind: 'score',
-          payload: summary as unknown as Record<string, unknown>,
-          createdAt: Date.now(),
-        }),
-      );
-    }
-  };
-
-  useEffect(() => {
-    const mount = canvasMountRef.current;
-    if (!mount) return;
-
-    const engine = new SkyforgeEngine(mount, {
-      onHudUpdate: (snap) => setHud(snap),
-      onTelemetry: (sample) => {
-        setTelemetry(sample);
-        setFpsHistory((prev) => [...prev.slice(1), sample.fps]);
-      },
-      onBuiltinRigLoaded: (_rigId, summary) => setBuiltinRigSummary(summary),
-      onRunComplete: (summary) => handleRunCompleteRef.current(summary),
-    });
-    engineRef.current = engine;
-
-    // Support ?autostart=1 for instant gameplay boot
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('autostart') === '1') {
-      engine.startGame('solo');
-    }
-
-    return () => {
-      engine.dispose();
-      engineRef.current = null;
-    };
-  }, []);
-
-  // Enter / Space start handshake on Title Screen
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (hubOpen) return;
-      if (hud.phase === 'title' && (e.code === 'Enter' || e.code === 'Space')) {
+      const targetTab = mapCode[e.code];
+      if (targetTab) {
         e.preventDefault();
-        engineRef.current?.startGame(selectedMode);
+        if (menuTab === targetTab) {
+          closeMenu();
+        } else {
+          openMenu(targetTab);
+        }
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [hud.phase, hubOpen, selectedMode]);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [hud.mode, menuTab, dialogueNodeId, devBlenderOpen, openMenu, closeMenu]);
 
-  const activeRigLabel = customRigSummary
-    ? `${customRigSummary.fileName} (${customRigSummary.format})`
-    : BUILTIN_RIGS.find((r) => r.id === activeRigId)?.name || 'Aether Vanguard';
+  useEffect(() => {
+    document.body.dataset.state = hud.mode;
+  }, [hud.mode]);
 
-  const handleOpenHub = (tab: HubTab = 'leaderboard') => {
-    if (hud.phase === 'playing') {
-      engineRef.current?.pauseGame();
-    }
-    setHubTab(tab);
-    setHubOpen(true);
-  };
-
-  const handleSelectBuiltinRig = (rigId: BuiltinRigId) => {
-    setActiveRigId(rigId);
-    setCustomRigSummary(null);
-    engineRef.current?.setBuiltinRig(rigId);
-    setProgress((p) => ({ ...p, preferredRig: rigId, updatedAt: Date.now() }));
-  };
-
-  const handleApplyCustomRig = (loaded: LoadedCustomRig) => {
-    setCustomRigSummary(loaded.summary);
-    engineRef.current?.applyCustomBlenderRig(loaded);
-  };
-
-  const handleApplyCustomSceneProp = (loaded: LoadedCustomRig | null) => {
-    setCustomPropSummary(loaded ? loaded.summary : null);
-    engineRef.current?.applyCustomSceneProp(loaded);
-  };
-
-  const handleApplyCustomEnemyRig = (loaded: LoadedCustomRig | null) => {
-    setCustomEnemySummary(loaded ? loaded.summary : null);
-    engineRef.current?.applyCustomEnemyRig(loaded);
-  };
-
-  const handleLogTelemetryToSql = async () => {
-    if (!user) {
-      setTelemetryFeedback('Sign in with Google in Cloud & Security to persist telemetry snapshots to Cloud SQL.');
-      return;
-    }
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/telemetry', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          avgFps: telemetry.fps,
-          avgFrameMs: telemetry.frameMs,
-          drawCalls: telemetry.drawCalls,
-          deviceType: detectPlatform(),
-        }),
-      });
-      setTelemetryFeedback(
-        res.ok
-          ? `Recorded ${telemetry.fps} FPS (${telemetry.frameMs}ms) snapshot to Cloud SQL.`
-          : 'Unable to persist telemetry snapshot right now.',
-      );
-    } catch {
-      setTelemetryFeedback('Offline — telemetry logged locally.');
-    }
-  };
+  const latestSave = allSaves.find((s) => s.save !== null)?.save ?? null;
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#121824]">
-      {/* Isolated WebGL Canvas Container — React state updates never remount it */}
-      <div
-        ref={canvasMountRef}
-        data-testid="skyforge-canvas-mount"
-        className="fixed inset-0 h-full w-full"
-      />
+    <div className="relative w-screen h-screen overflow-hidden bg-[#171B1E] text-[#D9D1BE]">
+      {/* Live 3D Three.js Frostheim / Oath Shrine Viewport */}
+      <div ref={viewportRef} className="absolute inset-0 w-full h-full" />
 
-      {/* Title Screen */}
-      {hud.phase === 'title' && !hubOpen && (
-        <TitleOverlay
-          mode={selectedMode}
-          onModeChange={setSelectedMode}
-          onStart={() => engineRef.current?.startGame(selectedMode)}
-          onOpenHub={handleOpenHub}
-          t={t}
-          bestScore={progress.bestScore}
-          activeRigLabel={activeRigLabel}
-          isOnline={isOnline}
-        />
-      )}
-
-      {/* Active Gameplay HUD */}
-      {hud.phase === 'playing' && (
-        <GameHud
-          hud={hud}
-          t={t}
-          muted={muted}
-          isOnline={isOnline}
-          onToggleMute={() => {
-            const next = engineRef.current?.getAudio().toggleMute() ?? !muted;
-            setMuted(next);
-          }}
-          onToggleCamera={() => engineRef.current?.toggleCameraMode()}
-          onPause={() => engineRef.current?.pauseGame()}
-          onOpenHub={() => handleOpenHub('leaderboard')}
-          onTouchMove={(x, z) => engineRef.current?.setTouchInput(x, z)}
-          onLookDelta={(dx, dy) => engineRef.current?.addLookDelta(dx, dy)}
-          onTouchAction={(action) => engineRef.current?.triggerMobileAction(action)}
-        />
-      )}
-
-      {/* Pause / Victory / Defeat Modal */}
-      {!hubOpen && (
-        <StatusModals
-          hud={hud}
-          bestScore={progress.bestScore}
-          t={t}
-          onResume={() => engineRef.current?.resumeGame()}
-          onRestart={() => engineRef.current?.startGame(selectedMode)}
-          onTitle={() => engineRef.current?.returnToTitle()}
-          onOpenHub={(tab) => handleOpenHub(tab || 'leaderboard')}
-        />
-      )}
-
-      {/* Slide-Over Citadel Hub (Leaderboards, Blender Forge, Social E2EE, Cloud SQL, AI, Docs) */}
-      <CitadelHub
-        open={hubOpen}
-        activeTab={hubTab}
-        onTabChange={setHubTab}
-        onClose={() => setHubOpen(false)}
-        user={user}
-        ownKeys={ownKeys}
-        isOnline={isOnline}
-        offlineQueueCount={offlineQueue.length}
-        leaderboard={leaderboard}
-        backups={backups}
-        syncStatus={syncStatus}
-        challenges={challenges}
-        progress={progress}
-        hud={hud}
-        telemetry={telemetry}
-        fpsHistory={fpsHistory}
-        activeRigId={activeRigId}
-        activeRigLabel={activeRigLabel}
-        builtinRigSummary={builtinRigSummary}
-        customRigSummary={customRigSummary}
-        customPropSummary={customPropSummary}
-        customEnemySummary={customEnemySummary}
-        locale={locale}
-        darkMode={darkMode}
-        t={t}
-        onLocaleChange={setLocale}
-        onToggleDarkMode={() => setDarkMode((d) => !d)}
-        onSelectBuiltinRig={handleSelectBuiltinRig}
-        onApplyCustomRig={handleApplyCustomRig}
-        onApplyCustomSceneProp={handleApplyCustomSceneProp}
-        onApplyCustomEnemyRig={handleApplyCustomEnemyRig}
-        onSignIn={async () => {
-          await signInWithGoogle();
-        }}
-        onSignOut={async () => {
-          await signOutPlayer();
-          setBackups([]);
-          setSyncStatus('Signed Out (Local Mode)');
-        }}
-        onSyncSave={async (isAutoBackup) => {
-          await performCloudSync(isAutoBackup);
-        }}
-        onRestoreBackup={(b) => {
-          setProgress((prev) => ({
-            ...prev,
-            highestWave: b.highestWave,
-            bestScore: b.bestScore,
-            totalKills: b.totalKills,
-            updatedAt: Date.now(),
-          }));
-          setSyncStatus(`Restored Cloud Backup v${b.version}`);
-        }}
-        onClaimChallenge={(id) => {
-          setChallenges((prev) =>
-            prev.map((c) => (c.id === id ? { ...c, claimed: true } : c)),
-          );
-          sendLocalAlert('Skyforge Reward Claimed', 'Your daily challenge reward has been unlocked!');
-        }}
-        onQueueOfflineMessage={(payload) => {
-          setOfflineQueue((q) =>
-            enqueueOfflineItem(q, {
-              id: `msg_${Date.now()}`,
-              kind: 'message',
-              payload,
-              createdAt: Date.now(),
-            }),
-          );
-        }}
-        onLogTelemetryToSql={handleLogTelemetryToSql}
-        telemetryFeedback={telemetryFeedback}
-      />
-
-      {/* Non-intrusive Offline Toast (No pulsating dots!) */}
-      {!isOnline && (
-        <div className="fixed bottom-3 left-3 z-50 rounded-lg border border-amber-400/60 bg-amber-950/95 px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-lg">
-          {t.offlineBanner}
+      {bootError && (
+        <div className="fixed inset-0 z-50 bg-[#171B1E]/95 flex items-center justify-center p-6">
+          <div className="max-w-lg border border-[#7D3834] bg-[#22272B] p-6 space-y-2">
+            <h1 className="text-lg uppercase tracking-widest text-[#D47A74]">EIDRATH Boot Error</h1>
+            <p className="text-sm text-[#D9D1BE]/85">{bootError}</p>
+          </div>
         </div>
       )}
-    </main>
+
+      {/* Title Screen */}
+      {hud.mode === 'title' && !menuTab && (
+        <EidrathTitleScreen
+          latestSave={latestSave}
+          allSaves={allSaves}
+          settings={settings}
+          onContinue={(s) => void engineRef.current?.loadSave(s)}
+          onNewGame={(nextSettings) => {
+            handleUpdateSettings(nextSettings);
+            void engineRef.current?.startNewGame('autosave');
+          }}
+          onLoadSlot={(s) => void engineRef.current?.loadSave(s)}
+          onUpdateSettings={handleUpdateSettings}
+          onOpenSettings={() => setMenuTab('settings')}
+        />
+      )}
+
+      {/* Gameplay HUD, Pause Overlay & Death Screen */}
+      {hud.mode !== 'title' && (
+        <EidrathHud
+          hud={hud}
+          settings={settings}
+          onOpenMenu={(tab) => openMenu(tab)}
+          onResume={() => engineRef.current?.setPaused(false, false)}
+          onReturnToTitle={() => {
+            setMenuTab(null);
+            engineRef.current?.returnToTitle();
+            refreshSlots();
+          }}
+          onRespawn={() => engineRef.current?.respawnAtCheckpoint()}
+          onCompanionCommand={(cmd) => engineRef.current?.setCompanionCommand(cmd)}
+          onTouchMove={(x, y) => engineRef.current?.setTouchMove(x, y)}
+          onTouchLook={(dx, dy) => engineRef.current?.addTouchLook(dx, dy)}
+          onTouchAction={(act) => engineRef.current?.triggerTouchAction(act)}
+        />
+      )}
+
+      {/* Authored Branching Dialogue Overlay */}
+      {dialogueNodeId && hud.mode === 'dialogue' && (
+        <DialogueOverlay
+          nodeId={dialogueNodeId}
+          save={save}
+          onChoose={(choiceId) => engineRef.current?.executeDialogueChoice(choiceId)}
+          onClose={() => engineRef.current?.closeDialogue()}
+        />
+      )}
+
+      {/* Tabbed RPG Menus (Inventory, Skills, World Map, Journal, Forge, Merchant, Settings) */}
+      {menuTab && (
+        <RpgMenus
+          activeTab={menuTab}
+          inGame={hud.mode !== 'title'}
+          save={save}
+          allSaves={allSaves}
+          settings={settings}
+          onChangeTab={(tab) => setMenuTab(tab)}
+          onClose={closeMenu}
+          onEquipItem={(id) => engineRef.current?.equipItem(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onUseItem={(id) => engineRef.current?.useItem(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onDropItem={(id) => engineRef.current?.dropItem(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onUnlockSkill={(id) => engineRef.current?.unlockSkill(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onResetSkills={() => engineRef.current?.resetSkills() ?? { ok: false, refunded: 0 }}
+          onCraftRecipe={(id) => engineRef.current?.craftRecipe(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onBuyItem={(id) => engineRef.current?.buyItem(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onSellItem={(id) => engineRef.current?.sellItem(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onTrackQuest={(id) => engineRef.current?.trackQuest(id)}
+          onFastTravel={(id) => engineRef.current?.fastTravelTo(id) ?? { ok: false, message: 'Engine unavailable.' }}
+          onManualSave={(slot) => engineRef.current?.manualSave(slot) ?? { ok: false, message: 'Engine unavailable.' }}
+          onLoadSlot={(s) => {
+            setMenuTab(null);
+            void engineRef.current?.loadSave(s);
+          }}
+          onUpdateSettings={handleUpdateSettings}
+          onOpenDevBlender={() => setDevBlenderOpen(true)}
+        />
+      )}
+
+      {/* Developer-Only Blender Asset Forge Drawer */}
+      {devBlenderOpen && (
+        <BlenderDevDrawer
+          onClose={() => setDevBlenderOpen(false)}
+          onPreviewGlb={async (id, buf, cat) => {
+            if (engineRef.current) {
+              await engineRef.current.previewDevGlb(id, buf, cat);
+            }
+          }}
+        />
+      )}
+    </div>
   );
 }
+
+export default App;

@@ -1,6 +1,19 @@
-# Skyforge Arena
+# EIDRATH: The Last Oath
 
-Responsive 3D indie action-arena game for mobile, tablet, and desktop built with Three.js, React 19, TypeScript, Express, Firebase, Drizzle PostgreSQL, and a live Blender 5.3 3D character pipeline.
+> *The gods created mankind to serve them. Now mankind must decide whether the gods deserve to live.*
+
+**EIDRATH: The Last Oath** is an original third-person, open-world dark-fantasy action RPG built with **Three.js**, **React 19**, **TypeScript**, **Vite**, **Express**, and **55 original Blender 5.3 `.glb` / `.blend` assets**.
+
+This repository delivers the verified **Act I: Frostheim Vertical Slice** (Phases 0–7 of `game.md`), replacing the prior Skyforge Arena application completely while preserving its Express Live Blender Bridge and optional cloud/security infrastructure.
+
+## Playable Frostheim Vertical Slice Features
+- **Open-World Frostheim (500m × 500m, 5×5 chunk activation)**: Continuous snowy terrain with natural mountain boundaries (no invisible arena wall), Oathgrave Tomb, Ashen Span Bridge, Ravenhold Sanctuary Village, Old Oath-Smithy, Whispering Pine Hunter Camp, Frozen Reach Lake & Cavern (Three-Rune Rotating Oath-Stone Puzzle), Silent Oath Shrine, and Warden's Keep (elevated silhouette visible from Ravenhold).
+- **Deliberate Third-Person Combat**: Over-the-shoulder camera with target lock-on (`Tab` / Middle-Click) and boss pull-back; Light 3-hit combo (`LMB`), Heavy Guard-Break Cleave (`RMB`), Block & 180ms+ Perfect Parry (`Q`), Dodge Roll with 180ms i-frames (`Space`), Stealth (`Ctrl`), Spells (`1` Rime Lance, `2` Cinder Arc, `3` Shattering Oath Wave), Potions (`4`/`5`), and Divine Ascension (`R`).
+- **5 Playable Quests & Authored Branching Dialogue**: *The Broken Oath*, *A Blade Remembered*, *The Missing Hunter*, *Voices Beneath Ice*, and *The Warden's Oath*, featuring Mercy / Pragmatic / Revenge choices, faction standings, corruption tracking, and active companion **Lyra** with Command Wheel (`Assist`, `Attack`, `Regroup`, `Wait`).
+- **Full RPG Systems**: 20 items & signature weapons (including two-handed *Oathbreaker*, *Nightpiercer*, *Worldshatter*, *Staff of Oblivion*, *Torment Links*), 7 Skill Trees (21 nodes with prerequisites and refund reset), Borin's Forge crafting & weapon tempering, Ravenhold Merchant buy/sell, Interactive Frostheim World Map with Fog-of-War & Fast Travel, and Lore Codex.
+- **3-Phase Boss Encounter — The Mountain Warden**: 4.07m rigged slate-and-iron guardian (900 HP) in the Warden's Keep Courtyard with Phase-2 destructible Seal Stones, capped Hollow adds, ground fissure warnings, safe approach checkpoint, one-time Oath-Seal reward, Return Shortcut to Ravenhold, and post-victory village dialogue.
+- **Offline-First Saves & Accessibility**: Versioned `SaveGame` v1 slots (`autosave`, `slot_1`–`slot_3`) with atomic `_backup` corruption self-healing, IndexedDB mirror, remappable keybindings, difficulty & graphics presets, subtitles, reduced motion, high-contrast combat cues, and responsive mobile touch controls.
+- **Developer-Only Blender Asset Forge**: Isolated under **Settings → Developer Tools → Open Forge** (outside player navigation), providing live Blender Bridge sessions and inspection of all 55 registered Blender 5.3 assets.
 
 ## Quick Start
 
@@ -9,53 +22,34 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Use `http://localhost:3000/?autostart=1` to jump directly into Solo Survival.
+Open `http://localhost:3000`. Core single-player gameplay works **100% offline** with no login or external API keys required.
 
-### Scripts
+## Verification & Production Commands
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Express API + Vite HMR dev server on port 3000 |
-| `npm run build` | Production client bundle + Workbox PWA service worker (`dist/`) |
-| `npm run lint` | Strict TypeScript typecheck (`tsc --noEmit`) |
-| `npm test` | Run unit tests (`rules`, `crypto`, `blenderBridge`, `assetLoader`) |
+```bash
+npm run lint                      # TypeScript strict check (tsc --noEmit)
+npm test                          # Unit, RPG, combat, save, crypto, bridge & 55-GLB asset tests
+npm run build                     # Production Vite + PWA bundle (dist/)
+NODE_ENV=production npm start     # Production Express server (tsx server.ts)
+python tools/qa/verify_eidrath_webgl.py  # Live Chrome WebGL E2E QA & screenshot capture
+```
 
-## Blender 5.3 Character & Asset Pipeline
+## Regenerating Original Blender 5.3 Assets
 
-All shipped characters, enemies, and arena obelisks are built, rigged, and animated in Blender 5.3:
+All 55 `.glb` runtime files (`public/assets/eidrath/`) and `.blend` masters (`art/blender/`) are reproducible via headless Blender 5.3 scripts:
 
-- **Runtime `.glb` assets** (precached by PWA Workbox for offline play):
-  - `public/models/heroes/`: `ranger.glb`, `vanguard.glb`, `sentinel.glb`, `ronin.glb`, `ember.glb` (18-bone humanoid armatures with `Idle`, `Run`, `Attack`, `Dash` NLA animation clips)
-  - `public/models/enemies/`: `charger.glb`, `kiter.glb`, `swarmer.glb` (`Idle`, `Run`, `Attack` clips)
-  - `public/models/props/`: `citadel_obelisk.glb`
-- **Editable `.blend` sources**: `blender/sources/*.blend`
-- **Cross-engine `.fbx` exports**: `blender/exports/*.fbx`
-- **Generator scripts**:
-  ```powershell
-  blender --background --python blender/build_heroes.py
-  blender --background --python blender/build_enemies.py
-  ```
+```bash
+blender --background --python tools/blender/build_eidrath_characters.py
+blender --background --python tools/blender/build_eidrath_enemies_boss.py
+blender --background --python tools/blender/build_eidrath_weapons.py
+blender --background --python tools/blender/build_eidrath_frostheim.py
+```
 
-### Live Blender Bridge & Custom Imports
+## Save Migration & Rollback Notes
+- **Legacy Preservation**: EIDRATH stores saves exclusively under `eidrath_save_v1_<slot>` and `eidrath_settings_v1`. Legacy `skyforge_*` localStorage records and existing Drizzle `cloud_saves` tables are **never overwritten or migrated destructively**.
+- **Rollback**: The pre-overhaul repository snapshot is preserved on branch `checkpoint/pre-eidrath-wip` (`9921bc6`), and original `main` remains untouched at `ff3eaed`.
 
-1. Open **Citadel Hub > Blender Forge**.
-2. Drag-and-drop any `.glb`, `.gltf`, or `.fbx` file into the **Player 1 Hero**, **Arena Props (x4)**, or **Enemy Models** slot. `src/game/assetLoader.ts` normalizes scale, grounds feet at `y = 0`, clones rigged `SkinnedMesh` hierarchies via `SkeletonUtils.clone`, and binds animation clips automatically.
-3. Click **Start Live Bridge**, download the pre-configured `skyforge_blender_bridge.py` add-on, install it in Blender 3.6–5.x, and push updates directly from Blender (`N` sidebar > **Skyforge**) or auto-sync on `Ctrl+S`.
-
-## Gameplay & Controls
-
-- **Modes**: Solo Survival (5 waves), Local 2P Co-op, Local 2P Duel (first to 5 KOs).
-- **Desktop**:
-  - Player 1: `WASD` move, `Space` dash, `J` or Left-Click attack/volley, `K` or Right-Click Nova, `P` / `Esc` pause, `M` mute.
-  - Player 2: `Arrow Keys` move, `Shift` dash, `Enter` / `/` attack.
-- **Mobile & Tablet**: Responsive virtual thumbstick and touch action pads (`Volley`, `Dash`, `Nova`).
-
-## Backend, Cloud Sync, Security & Offline Architecture
-
-- **Firebase Auth & Real-Time Firestore** (`src/lib/firebase.ts`, `firestore.rules`): Google sign-in, live `onSnapshot` leaderboards, offline `persistentLocalCache`, strict zero-trust Firestore rules (`security_spec.md`), and scoped E2EE messaging.
-- **PostgreSQL Cross-Platform Saves & Telemetry** (`src/db/`, `server.ts`): Drizzle ORM schema for `users`, versioned `cloud_saves` backups, `match_history`, and `performance_logs`. Configure either `DATABASE_URL` or `SQL_HOST`/`SQL_DB_NAME`/`SQL_USER`/`SQL_PASSWORD` in `.env` (see `.env.example`).
-- **Offline PWA & Monotonic Queue Replay** (`vite.config.ts`, `src/App.tsx`): Workbox precaches JS, CSS, textures, and `.glb` models. Offline progress, scores, and encrypted messages queue locally and flush automatically on reconnect.
-- **End-to-End Encrypted Social Chat** (`src/utils/crypto.ts`, `src/components/hub/SocialE2EETab.tsx`): Client-side Web Crypto `ECDH P-256` key agreement + `AES-GCM 256` authenticated encryption; only ciphertext and IV leave the browser or touch local storage.
-- **OS Biometric Passkey Lock** (`src/utils/biometrics.ts`): Uses WebAuthn platform authenticators (`Windows Hello`, `Face ID`, `Touch ID`, `Android BiometricPrompt`); no raw biometric templates or facial data are stored.
-- **API Hardening & Low-Latency Monitoring** (`server.ts`, `src/components/hub/DocsMonitorTab.tsx`): Firebase ID token verification on SQL routes, fixed-window rate limiting, security headers, `X-Response-Time` header, `/api/health` readiness endpoint, and optional Gemini low-latency (`/api/ai/quick-tip`) + deep analysis (`/api/ai/deep-analysis`) endpoints.
-- **Internationalization & Themes** (`src/utils/i18n.ts`): English, Spanish, Japanese, and French plus persistent Dark/Daylight themes and global Hub search.
+## Documentation & Scope
+- [Implementation Status](docs/IMPLEMENTATION_STATUS.md) — Phase 0–7 verification & Phase 8–10 remaining campaign roadmap (remaining 6 kingdoms, Seven Gods, 5 endings)
+- [Asset Manifest](docs/ASSET_MANIFEST.md) — All 55 Blender 5.3 assets, triangle budgets, heights, and visual QA sheet references
+- [Test Report](docs/TEST_REPORT.md) — Full `QA-01`–`QA-12` results, Chrome WebGL frame-time metrics, and screenshot inventory

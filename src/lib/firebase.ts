@@ -23,7 +23,8 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import type { GameMode } from '../game/rules';
+
+export type GameMode = 'solo' | 'coop' | 'coop2p' | 'duel' | 'duel2p';
 
 const app = initializeApp(firebaseConfig);
 
