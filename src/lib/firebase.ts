@@ -369,27 +369,35 @@ export function subscribeUserMessages(
   onError?: (err: Error) => void,
 ): Unsubscribe {
   const path = 'messages';
-  const q = query(collection(db, path), where('senderUid', '==', uid), limit(30));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const msgs: EncryptedMessageRecord[] = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          senderUid: String(data.senderUid ?? ''),
-          recipientUid: String(data.recipientUid ?? ''),
-          senderName: String(data.senderName ?? 'Pilot'),
-          ciphertext: String(data.ciphertext ?? ''),
-          iv: String(data.iv ?? ''),
-          senderPublicKey: String(data.senderPublicKey ?? ''),
-        };
+  const sentQuery = query(collection(db, path), where('senderUid', '==', uid), limit(30));
+  const recvQuery = query(collection(db, path), where('recipientUid', '==', uid), limit(30));
+
+  const byId = new Map<string, EncryptedMessageRecord>();
+  const mapSnap = (snap: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }) => {
+    for (const d of snap.docs) {
+      const data = d.data();
+      byId.set(d.id, {
+        id: d.id,
+        senderUid: String(data.senderUid ?? ''),
+        recipientUid: String(data.recipientUid ?? ''),
+        senderName: String(data.senderName ?? 'Pilot'),
+        ciphertext: String(data.ciphertext ?? ''),
+        iv: String(data.iv ?? ''),
+        senderPublicKey: String(data.senderPublicKey ?? ''),
       });
-      onData(msgs);
-    },
-    (err) => {
-      if (onError) onError(err);
-      else handleFirestoreError(err, OperationType.LIST, path);
-    },
-  );
+    }
+    onData(Array.from(byId.values()));
+  };
+
+  const handleErr = (err: Error) => {
+    if (onError) onError(err);
+    else handleFirestoreError(err, OperationType.LIST, path);
+  };
+
+  const unsubSent = onSnapshot(sentQuery, mapSnap, handleErr);
+  const unsubRecv = onSnapshot(recvQuery, mapSnap, handleErr);
+  return () => {
+    unsubSent();
+    unsubRecv();
+  };
 }

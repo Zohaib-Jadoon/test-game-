@@ -200,10 +200,10 @@ export const CloudSecurityTab: React.FC<CloudSecurityTabProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className={`rounded-xl border p-4 ${cardBg}`}>
           <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-            Biometric Passkey Vault (WebAuthn)
+            OS Biometric Passkey Lock (WebAuthn)
           </h3>
           <p className="mt-1 text-xs opacity-80">
-            Protect cross-platform cloud saves with your device fingerprint or face authenticator.
+            Uses your OS platform authenticator (Windows Hello, Face ID, Touch ID, Android BiometricPrompt). Raw biometric templates never leave your device or touch Skyforge servers.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button

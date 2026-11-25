@@ -11,6 +11,7 @@ import type { ImportedAssetSummary, LoadedCustomRig } from './game/assetLoader';
 import {
   auth,
   SEEDED_LEADERBOARD,
+  sendFirestoreEncryptedMessage,
   signInWithGoogle,
   signOutPlayer,
   submitLeaderboardScore,
@@ -38,6 +39,25 @@ import type { CloudBackupRow } from './components/hub/CloudSecurityTab';
 const LOCAL_PROGRESS_KEY = 'skyforge_progress_v1';
 const LOCAL_QUEUE_KEY = 'skyforge_offline_queue_v1';
 const LOCAL_E2EE_KEY = 'skyforge_e2ee_keys_v1';
+const LOCAL_PREFS_KEY = 'skyforge_prefs_v1';
+
+function loadLocalPrefs(): { locale: Locale; darkMode: boolean } {
+  try {
+    const raw = localStorage.getItem(LOCAL_PREFS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { locale?: Locale; darkMode?: boolean };
+      const locale =
+        parsed.locale && parsed.locale in TRANSLATIONS ? parsed.locale : 'en';
+      return {
+        locale,
+        darkMode: typeof parsed.darkMode === 'boolean' ? parsed.darkMode : true,
+      };
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return { locale: 'en', darkMode: true };
+}
 
 function detectPlatform(): 'mobile' | 'tablet' | 'desktop' {
   if (typeof window === 'undefined') return 'desktop';
@@ -76,6 +96,12 @@ function loadOfflineQueue(): OfflineSyncItem[] {
 const INITIAL_HUD: HudSnapshot = {
   phase: 'title',
   mode: 'solo',
+  cameraMode: 'fps',
+  pointerLocked: false,
+  hitmarker: 'none',
+  sprinting: false,
+  grounded: true,
+  speed: 0,
   wave: 1,
   maxWaves: 5,
   score: 0,
@@ -92,6 +118,9 @@ const INITIAL_HUD: HudSnapshot = {
   winnerLabel: '',
   enemiesRemaining: 0,
   bannerText: '',
+  cameraHeadingRad: 0,
+  wordWallBearingRad: 0,
+  enemyBearingsRad: [],
 };
 
 export default function App() {
@@ -104,9 +133,11 @@ export default function App() {
   const [hubOpen, setHubOpen] = useState(false);
   const [hubTab, setHubTab] = useState<HubTab>('leaderboard');
 
-  const [locale, setLocale] = useState<Locale>('en');
-  const [darkMode, setDarkMode] = useState(true);
+  const [initialPrefs] = useState(() => loadLocalPrefs());
+  const [locale, setLocale] = useState<Locale>(initialPrefs.locale);
+  const [darkMode, setDarkMode] = useState(initialPrefs.darkMode);
   const [activeRigId, setActiveRigId] = useState<BuiltinRigId>('ranger');
+  const [builtinRigSummary, setBuiltinRigSummary] = useState<ImportedAssetSummary | null>(null);
   const [customRigSummary, setCustomRigSummary] = useState<ImportedAssetSummary | null>(null);
   const [customPropSummary, setCustomPropSummary] = useState<ImportedAssetSummary | null>(null);
   const [customEnemySummary, setCustomEnemySummary] = useState<ImportedAssetSummary | null>(null);
@@ -164,6 +195,14 @@ export default function App() {
       // ignore
     }
   }, [offlineQueue]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_PREFS_KEY, JSON.stringify({ locale, darkMode }));
+    } catch {
+      // ignore
+    }
+  }, [locale, darkMode]);
 
   // Initialize persistent Web Crypto ECDH P-256 identity keypair
   useEffect(() => {
@@ -331,14 +370,85 @@ export default function App() {
     };
   }, [fetchSqlBackups]);
 
-  // Flush offline queue automatically when back online
+  // Flush offline queue automatically when back online, replaying saves, scores, and E2EE messages
+  const offlineQueueRef = useRef(offlineQueue);
+  offlineQueueRef.current = offlineQueue;
+  const flushInFlightRef = useRef(false);
+
   useEffect(() => {
-    if (!isOnline || !user || offlineQueue.length === 0) return;
+    if (!isOnline || !user || offlineQueueRef.current.length === 0 || flushInFlightRef.current) {
+      return;
+    }
+    flushInFlightRef.current = true;
+    let cancelled = false;
     void (async () => {
-      await performCloudSync(true);
-      setOfflineQueue([]);
+      const snapshot = [...offlineQueueRef.current];
+      const remaining: OfflineSyncItem[] = [];
+      let needsSaveSync = false;
+      const token = await user.getIdToken().catch(() => null);
+
+      for (const item of snapshot) {
+        if (cancelled) break;
+        try {
+          if (item.kind === 'save') {
+            needsSaveSync = true;
+          } else if (item.kind === 'score') {
+            const score = Number(item.payload.score) || 0;
+            const wave = Number(item.payload.wave) || 1;
+            const kills = Number(item.payload.kills) || 0;
+            const mode = (item.payload.mode as GameMode) || 'solo';
+            const rigUsed = String(item.payload.rigUsed || 'ranger');
+            if (user.emailVerified && score > 0) {
+              await submitLeaderboardScore({ user, score, wave, kills, mode, rigUsed });
+            }
+            if (token) {
+              await fetch('/api/matches', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(item.payload),
+              });
+            }
+            needsSaveSync = true;
+          } else if (item.kind === 'message') {
+            if (
+              user.emailVerified &&
+              typeof item.payload.recipientUid === 'string' &&
+              typeof item.payload.ciphertext === 'string' &&
+              typeof item.payload.iv === 'string' &&
+              typeof item.payload.senderPublicKey === 'string'
+            ) {
+              await sendFirestoreEncryptedMessage({
+                user,
+                recipientUid: item.payload.recipientUid,
+                ciphertext: item.payload.ciphertext,
+                iv: item.payload.iv,
+                senderPublicKey: item.payload.senderPublicKey,
+              });
+            }
+          }
+        } catch {
+          remaining.push(item);
+        }
+      }
+
+      if (!cancelled) {
+        if (needsSaveSync) {
+          await performCloudSync(true);
+        }
+        if (remaining.length !== snapshot.length) {
+          setOfflineQueue(remaining);
+        }
+      }
+      flushInFlightRef.current = false;
     })();
-  }, [isOnline, user, offlineQueue.length, performCloudSync]);
+    return () => {
+      cancelled = true;
+      flushInFlightRef.current = false;
+    };
+  }, [isOnline, user, performCloudSync]);
 
   // Mount isolated 3D WebGL engine ONCE
   const handleRunCompleteRef = useRef<
@@ -440,6 +550,7 @@ export default function App() {
         setTelemetry(sample);
         setFpsHistory((prev) => [...prev.slice(1), sample.fps]);
       },
+      onBuiltinRigLoaded: (_rigId, summary) => setBuiltinRigSummary(summary),
       onRunComplete: (summary) => handleRunCompleteRef.current(summary),
     });
     engineRef.current = engine;
@@ -567,9 +678,11 @@ export default function App() {
             const next = engineRef.current?.getAudio().toggleMute() ?? !muted;
             setMuted(next);
           }}
+          onToggleCamera={() => engineRef.current?.toggleCameraMode()}
           onPause={() => engineRef.current?.pauseGame()}
           onOpenHub={() => handleOpenHub('leaderboard')}
           onTouchMove={(x, z) => engineRef.current?.setTouchInput(x, z)}
+          onLookDelta={(dx, dy) => engineRef.current?.addLookDelta(dx, dy)}
           onTouchAction={(action) => engineRef.current?.triggerMobileAction(action)}
         />
       )}
@@ -607,6 +720,7 @@ export default function App() {
         fpsHistory={fpsHistory}
         activeRigId={activeRigId}
         activeRigLabel={activeRigLabel}
+        builtinRigSummary={builtinRigSummary}
         customRigSummary={customRigSummary}
         customPropSummary={customPropSummary}
         customEnemySummary={customEnemySummary}

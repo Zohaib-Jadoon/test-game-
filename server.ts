@@ -18,19 +18,64 @@ import {
   recordPerformanceLog,
   saveCloudSnapshot,
 } from './src/db/repository.ts';
+import { isSqlConfigured } from './src/db/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 
-// Security headers for API protection
+// Security headers & low-latency response timing
 app.use((_req, res, next) => {
+  const startNs = process.hrtime.bigint();
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  const origEnd = res.end.bind(res);
+  res.end = ((...args: Parameters<typeof res.end>) => {
+    if (!res.headersSent) {
+      const elapsedMs = Number(process.hrtime.bigint() - startNs) / 1e6;
+      res.setHeader('X-Response-Time', `${elapsedMs.toFixed(1)}ms`);
+    }
+    return origEnd(...args);
+  }) as typeof res.end;
   next();
 });
+
+// Lightweight fixed-window API rate limiter (ponytail: in-memory Map, swap to Redis for multi-instance)
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX_REQUESTS = 180;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  const key = req.ip || 'unknown';
+  const now = Date.now();
+  let bucket = rateBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = { count: 0, resetAt: now + RATE_WINDOW_MS };
+    rateBuckets.set(key, bucket);
+  }
+  bucket.count += 1;
+  res.setHeader('X-RateLimit-Limit', String(RATE_MAX_REQUESTS));
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, RATE_MAX_REQUESTS - bucket.count)));
+  if (bucket.count > RATE_MAX_REQUESTS) {
+    return res.status(429).json({ error: 'Too many API requests. Please retry shortly.' });
+  }
+  next();
+});
+
+const requireSqlConfigured: express.RequestHandler = (_req, res, next) => {
+  if (!isSqlConfigured()) {
+    return res.status(503).json({
+      error: 'PostgreSQL database is not configured. Set DATABASE_URL or SQL_HOST in .env.',
+    });
+  }
+  next();
+};
 
 function getGeminiClient() {
   return new GoogleGenAI({
@@ -45,7 +90,13 @@ function getGeminiClient() {
 
 // Health check (lightweight, no DB startup probe)
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'skyforge-arena', timestamp: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: 'skyforge-arena',
+    dbConfigured: isSqlConfigured(),
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -207,7 +258,7 @@ app.delete('/api/blender-bridge/:sessionId', (req, res) => {
 });
 
 // Authenticated Cloud SQL Profile sync
-app.post('/api/profile/sync', requireAuth, async (req: AuthRequest, res) => {
+app.post('/api/profile/sync', requireAuth, requireSqlConfigured, async (req: AuthRequest, res) => {
   try {
     const uid = req.user!.uid;
     const email = req.user!.email || `${uid}@skyforge.local`;
@@ -225,7 +276,7 @@ app.post('/api/profile/sync', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // Cross-platform Cloud SQL Save & Automated Cloud Backups
-app.get('/api/saves', requireAuth, async (req: AuthRequest, res) => {
+app.get('/api/saves', requireAuth, requireSqlConfigured, async (req: AuthRequest, res) => {
   try {
     const backups = await listCloudBackups(req.user!.uid);
     res.json({ backups });
@@ -236,7 +287,7 @@ app.get('/api/saves', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-app.post('/api/saves', requireAuth, async (req: AuthRequest, res) => {
+app.post('/api/saves', requireAuth, requireSqlConfigured, async (req: AuthRequest, res) => {
   try {
     const uid = req.user!.uid;
     const email = req.user!.email || `${uid}@skyforge.local`;
@@ -267,7 +318,7 @@ app.post('/api/saves', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // Cloud SQL Match History
-app.get('/api/matches', requireAuth, async (req: AuthRequest, res) => {
+app.get('/api/matches', requireAuth, requireSqlConfigured, async (req: AuthRequest, res) => {
   try {
     const matches = await getPlayerMatches(req.user!.uid);
     res.json({ matches });
@@ -278,7 +329,7 @@ app.get('/api/matches', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-app.post('/api/matches', requireAuth, async (req: AuthRequest, res) => {
+app.post('/api/matches', requireAuth, requireSqlConfigured, async (req: AuthRequest, res) => {
   try {
     const uid = req.user!.uid;
     const email = req.user!.email || `${uid}@skyforge.local`;
@@ -304,7 +355,7 @@ app.post('/api/matches', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // Real-Time Performance Monitoring Log (Cloud SQL)
-app.post('/api/telemetry', requireAuth, async (req: AuthRequest, res) => {
+app.post('/api/telemetry', requireAuth, requireSqlConfigured, async (req: AuthRequest, res) => {
   try {
     const uid = req.user!.uid;
     const email = req.user!.email || `${uid}@skyforge.local`;

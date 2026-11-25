@@ -10,14 +10,14 @@ export const DEVELOPER_DOCS: DocArticle[] = [
   {
     id: 'blender-gltf-pipeline',
     category: 'Blender 3D',
-    title: 'Blender to Skyforge Arena (GLTF / GLB / FBX Pipeline)',
+    title: 'Blender 5.3 to Skyforge Arena (GLTF / GLB / FBX Pipeline)',
     summary:
-      'Export rigged characters or custom arena champions directly from Blender 4.x and hot-swap them into the live Three.js WebGL arena.',
+      'All 5 playable heroes, 3 enemy archetypes, and arena obelisks are authored and rigged in Blender 5.3, exported as binary .glb and .fbx, and driven via Three.js SkeletonUtils + AnimationMixer.',
     bullets: [
-      'In Blender, apply all transforms (Ctrl+A -> All Transforms) and orient your character facing +Y (exported to +Z in glTF) with feet grounded at Z = 0.',
-      'Export via File -> Export -> glTF 2.0 (.glb) with Include: Selected Objects, Transform: +Y Up, and Animation: NLA Tracks / Baked Animations enabled.',
-      'For legacy FBX rigs, export Binary FBX (Scale 1.0, Apply Scalings: FBX Units Scale); Skyforge AssetLoader auto-normalizes height to 2.1m and anchors the pivot at y = 0.',
-      'Use the "Export Hero .GLB" button in the Blender Forge tab to download a ready-made Skyforge Vanguard rig, modify its armor or colors in Blender, and drop it straight back into the game.',
+      'Shipped rigged heroes live in public/models/heroes/ (ranger, vanguard, sentinel, ronin, ember) and enemies in public/models/enemies/ (charger, kiter, swarmer), with editable .blend sources in blender/sources/ and .fbx exports in blender/exports/.',
+      'Regenerate or customize assets anytime with blender --background --python blender/build_heroes.py (and build_enemies.py); armatures use 4 baked NLA clips (Idle, Run, Attack, Dash) facing -Y in Blender (+Z in Three.js) grounded at Z = 0.',
+      'AssetLoader uses SkeletonUtils.clone for safe SkinnedMesh instancing, per-instance material cloning for isolated hit-flash/telegraph tints, and case-insensitive animation clip resolution for third-party Blender/Mixamo/CGTrader .glb/.gltf/.fbx imports.',
+      'The Live Blender Bridge add-on supports Blender 3.6–5.x, automatically preserving armature skinning (export_apply=False when armatures exist) and pushing directly into the selected Hero, Enemy, or Arena Prop slot.',
     ],
   },
   {

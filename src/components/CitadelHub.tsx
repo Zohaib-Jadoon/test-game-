@@ -36,6 +36,7 @@ interface CitadelHubProps {
   fpsHistory: number[];
   activeRigId: BuiltinRigId;
   activeRigLabel: string;
+  builtinRigSummary: ImportedAssetSummary | null;
   customRigSummary: ImportedAssetSummary | null;
   customPropSummary: ImportedAssetSummary | null;
   customEnemySummary: ImportedAssetSummary | null;
@@ -77,6 +78,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
   fpsHistory,
   activeRigId,
   activeRigLabel,
+  builtinRigSummary,
   customRigSummary,
   customPropSummary,
   customEnemySummary,
@@ -346,6 +348,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           {activeTab === 'forge' && (
             <BlenderForgeTab
               activeRigId={activeRigId}
+              builtinRigSummary={builtinRigSummary}
               customRigSummary={customRigSummary}
               customPropSummary={customPropSummary}
               customEnemySummary={customEnemySummary}

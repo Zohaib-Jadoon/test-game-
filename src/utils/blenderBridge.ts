@@ -81,7 +81,7 @@ export function sanitizePythonString(value: string): string {
 }
 
 /**
- * Generates a self-contained Blender 3.6 / 4.x Python add-on (.py) that connects
+ * Generates a self-contained Blender 3.6 – 5.x Python add-on (.py) that connects
  * Blender directly to this Skyforge Arena instance via authenticated HTTP POST.
  */
 export function generateBlenderAddonScript(config: BlenderAddonConfig): string {
@@ -92,10 +92,10 @@ export function generateBlenderAddonScript(config: BlenderAddonConfig): string {
   return `bl_info = {
     "name": "Skyforge Arena Live Bridge",
     "author": "Skyforge Arena",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar (N) > Skyforge",
-    "description": "Export and live-sync Blender character rigs (.glb) directly into Skyforge Arena.",
+    "description": "Export and live-sync Blender 3.6-5.x character rigs (.glb) directly into Skyforge Arena.",
     "category": "Import-Export",
 }
 
@@ -155,14 +155,24 @@ def _push_scene_to_skyforge(context):
     tmp_path = os.path.join(tempfile.gettempdir(), "skyforge_live_export.glb")
 
     try:
-        bpy.ops.export_scene.gltf(
-            filepath=tmp_path,
-            export_format="GLB",
-            use_selection=props.export_selected_only,
-            export_yup=True,
-            export_apply=True,
-            export_animations=True,
-        )
+        export_objs = context.selected_objects if props.export_selected_only else context.scene.objects
+        has_armature = any(obj.type == "ARMATURE" for obj in export_objs)
+        export_kwargs = {
+            "filepath": tmp_path,
+            "export_format": "GLB",
+            "use_selection": props.export_selected_only,
+            "export_yup": True,
+            "export_apply": not has_armature,
+            "export_skins": True,
+            "export_animations": True,
+        }
+        if has_armature:
+            rna_props = {p.identifier for p in bpy.ops.export_scene.gltf.get_rna_type().properties}
+            if "export_def_bones" in rna_props:
+                export_kwargs["export_def_bones"] = True
+            if "export_animation_mode" in rna_props:
+                export_kwargs["export_animation_mode"] = "NLA_TRACKS"
+        bpy.ops.export_scene.gltf(**export_kwargs)
         with open(tmp_path, "rb") as f:
             payload = f.read()
     except Exception as exc:

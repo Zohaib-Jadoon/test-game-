@@ -46,6 +46,7 @@ const DARK_RANGER_TEXTURES = [
 
 interface BlenderForgeTabProps {
   activeRigId: BuiltinRigId;
+  builtinRigSummary: ImportedAssetSummary | null;
   customRigSummary: ImportedAssetSummary | null;
   customPropSummary: ImportedAssetSummary | null;
   customEnemySummary: ImportedAssetSummary | null;
@@ -65,6 +66,7 @@ interface BridgeSession {
 
 export const BlenderForgeTab: React.FC<BlenderForgeTabProps> = ({
   activeRigId,
+  builtinRigSummary,
   customRigSummary,
   customPropSummary,
   customEnemySummary,
@@ -77,10 +79,15 @@ export const BlenderForgeTab: React.FC<BlenderForgeTabProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastVersionRef = useRef<number>(0);
-  const onApplyRef = useRef(onApplyCustomRig);
-  onApplyRef.current = onApplyCustomRig;
-
   const [importTarget, setImportTarget] = useState<ImportTargetSlot>('hero');
+  const targetRef = useRef<ImportTargetSlot>('hero');
+  targetRef.current = importTarget;
+  const onApplyHeroRef = useRef(onApplyCustomRig);
+  onApplyHeroRef.current = onApplyCustomRig;
+  const onApplyPropRef = useRef(onApplyCustomSceneProp);
+  onApplyPropRef.current = onApplyCustomSceneProp;
+  const onApplyEnemyRef = useRef(onApplyCustomEnemyRig);
+  onApplyEnemyRef.current = onApplyCustomEnemyRig;
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -138,9 +145,15 @@ export const BlenderForgeTab: React.FC<BlenderForgeTabProps> = ({
           lastVersionRef.current = data.version;
           setBridgeVersion(data.version);
           setBridgeLastFile(fileName);
-          onApplyRef.current(loaded);
+          if (targetRef.current === 'prop') {
+            onApplyPropRef.current(loaded);
+          } else if (targetRef.current === 'enemy') {
+            onApplyEnemyRef.current(loaded);
+          } else {
+            onApplyHeroRef.current(loaded);
+          }
           setStatusMsg(
-            `Live Bridge Sync #${data.version}: Hot-swapped ${fileName} directly onto Player 1 in the 3D arena!`,
+            `Live Bridge Sync #${data.version}: Hot-swapped ${fileName} into ${targetRef.current.toUpperCase()} slot in the 3D arena!`,
           );
           setErrorMsg(null);
         }
@@ -348,7 +361,7 @@ export const BlenderForgeTab: React.FC<BlenderForgeTabProps> = ({
           <div>
             <h3 className="font-display text-sm font-bold tracking-wide">
               <span className={darkMode ? 'text-[#67e8f9]' : 'text-sky-800'}>
-                Live Blender Bridge (Blender 3.6 / 4.x Add-on)
+                Live Blender Bridge (Blender 3.6 – 5.x Add-on)
               </span>
             </h3>
             <p className={`mt-0.5 text-xs ${mutedText}`}>
@@ -671,42 +684,57 @@ export const BlenderForgeTab: React.FC<BlenderForgeTabProps> = ({
         )}
       </div>
 
-      {/* Live Custom Rig Telemetry Inspector */}
-      {customRigSummary && (
-        <div className={`rounded-xl border p-4 ${cardBg}`}>
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400">
-              Active Custom Blender Rig
-            </h4>
-            <span className="rounded bg-sky-500/20 px-2 py-0.5 font-mono-num text-[11px] font-bold text-sky-300">
-              {customRigSummary.format}
-            </span>
-          </div>
-          <p className="mt-1 text-sm font-semibold">{customRigSummary.fileName}</p>
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-            <div className="rounded bg-black/20 p-2">
-              <div className="text-[10px] uppercase opacity-70">Meshes</div>
-              <div className="font-mono-num text-sm font-bold">{customRigSummary.meshCount}</div>
+      {/* Live Blender Rig Telemetry Inspector (Active Shipped or Custom Rig) */}
+      {(customRigSummary || builtinRigSummary) && (() => {
+        const activeSummary = customRigSummary ?? builtinRigSummary!;
+        return (
+          <div className={`rounded-xl border p-4 ${cardBg}`}>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400">
+                {customRigSummary ? 'Active Custom Blender Rig' : 'Active Shipped Blender 5.3 Hero Rig'}
+              </h4>
+              <span className="rounded bg-sky-500/20 px-2 py-0.5 font-mono-num text-[11px] font-bold text-sky-300">
+                {activeSummary.format}
+              </span>
             </div>
-            <div className="rounded bg-black/20 p-2">
-              <div className="text-[10px] uppercase opacity-70">Triangles</div>
-              <div className="font-mono-num text-sm font-bold">
-                {customRigSummary.triangleCount.toLocaleString()}
+            <p className="mt-1 text-sm font-semibold">{activeSummary.fileName}</p>
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+              <div className="rounded bg-black/20 p-2">
+                <div className="text-[10px] uppercase opacity-70">Meshes</div>
+                <div className="font-mono-num text-sm font-bold">{activeSummary.meshCount}</div>
+              </div>
+              <div className="rounded bg-black/20 p-2">
+                <div className="text-[10px] uppercase opacity-70">Triangles</div>
+                <div className="font-mono-num text-sm font-bold">
+                  {activeSummary.triangleCount.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded bg-black/20 p-2">
+                <div className="text-[10px] uppercase opacity-70">Materials</div>
+                <div className="font-mono-num text-sm font-bold">{activeSummary.materialCount}</div>
+              </div>
+              <div className="rounded bg-black/20 p-2">
+                <div className="text-[10px] uppercase opacity-70">Clips</div>
+                <div className="font-mono-num text-sm font-bold">
+                  {activeSummary.animationNames.length}
+                </div>
               </div>
             </div>
-            <div className="rounded bg-black/20 p-2">
-              <div className="text-[10px] uppercase opacity-70">Materials</div>
-              <div className="font-mono-num text-sm font-bold">{customRigSummary.materialCount}</div>
-            </div>
-            <div className="rounded bg-black/20 p-2">
-              <div className="text-[10px] uppercase opacity-70">Clips</div>
-              <div className="font-mono-num text-sm font-bold">
-                {customRigSummary.animationNames.length}
+            {activeSummary.animationNames.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {activeSummary.animationNames.map((clip) => (
+                  <span
+                    key={clip}
+                    className="rounded border border-emerald-400/35 bg-emerald-950/40 px-2 py-0.5 font-mono text-[10px] text-emerald-300"
+                  >
+                    {clip}
+                  </span>
+                ))}
               </div>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Ready-Made Procedural Hero Rigs */}
       <div>

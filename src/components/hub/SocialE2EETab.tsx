@@ -6,7 +6,21 @@ import {
   generateE2EEKeyPair,
   type SerializedKeyPair,
 } from '../../utils/crypto';
-import { sendFirestoreEncryptedMessage } from '../../lib/firebase';
+import { sendFirestoreEncryptedMessage, subscribeUserMessages } from '../../lib/firebase';
+
+const SOCIAL_FRIENDS_KEY = 'skyforge_friends_v1';
+const SOCIAL_MESSAGES_KEY = 'skyforge_e2ee_msgs_v1';
+
+interface StoredEncryptedMessage {
+  id: string;
+  senderName: string;
+  recipientUid: string;
+  ciphertext: string;
+  iv: string;
+  senderPublicKey: string;
+  timestamp: string;
+  syncedCloud: boolean;
+}
 
 interface FriendItem {
   uid: string;
@@ -62,41 +76,149 @@ export const SocialE2EETab: React.FC<SocialE2EETabProps> = ({
     ? 'bg-[#0b111d] border-slate-700 text-white placeholder:text-slate-400'
     : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-500';
 
-  // Initialize deterministic sparring friends with real Web Crypto ECDH P-256 keys
+  // Initialize or restore friends + decrypt stored E2EE envelopes on mount
   useEffect(() => {
     let active = true;
     async function initPeers() {
-      const k1 = await generateE2EEKeyPair();
-      const k2 = await generateE2EEKeyPair();
+      let loadedFriends: FriendItem[] = [];
+      try {
+        const rawFriends = localStorage.getItem(SOCIAL_FRIENDS_KEY);
+        if (rawFriends) {
+          const parsed = JSON.parse(rawFriends) as FriendItem[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            loadedFriends = parsed;
+          }
+        }
+      } catch {
+        // ignore storage read errors
+      }
+
+      if (loadedFriends.length === 0) {
+        const k1 = await generateE2EEKeyPair();
+        const k2 = await generateE2EEKeyPair();
+        if (!active) return;
+        loadedFriends = [
+          {
+            uid: 'peer_lyra_skyblade',
+            name: 'Lyra_Skyblade',
+            rig: 'Eclipse Ronin',
+            bestScore: 8420,
+            status: 'online',
+            publicKeyJwk: k1.publicKeyJwk,
+            privateKeyJwk: k1.privateKeyJwk,
+          },
+          {
+            uid: 'peer_kairo_forge',
+            name: 'KairoForge',
+            rig: 'Dread Vanguard',
+            bestScore: 6950,
+            status: 'in-arena',
+            publicKeyJwk: k2.publicKeyJwk,
+            privateKeyJwk: k2.privateKeyJwk,
+          },
+        ];
+        try {
+          localStorage.setItem(SOCIAL_FRIENDS_KEY, JSON.stringify(loadedFriends));
+        } catch {
+          // ignore
+        }
+      }
+
       if (!active) return;
-      const initial: FriendItem[] = [
-        {
-          uid: 'peer_lyra_skyblade',
-          name: 'Lyra_Skyblade',
-          rig: 'Astral Ronin',
-          bestScore: 8420,
-          status: 'online',
-          publicKeyJwk: k1.publicKeyJwk,
-          privateKeyJwk: k1.privateKeyJwk,
-        },
-        {
-          uid: 'peer_kairo_forge',
-          name: 'KairoForge',
-          rig: 'Aether Vanguard',
-          bestScore: 6950,
-          status: 'in-arena',
-          publicKeyJwk: k2.publicKeyJwk,
-          privateKeyJwk: k2.privateKeyJwk,
-        },
-      ];
-      setFriends(initial);
-      setSelectedFriendUid(initial[0].uid);
+      setFriends(loadedFriends);
+      setSelectedFriendUid((prev) => prev || loadedFriends[0].uid);
+
+      // Decrypt persisted E2EE envelopes (plaintext is never stored in localStorage)
+      if (!ownKeys) return;
+      try {
+        const rawMsgs = localStorage.getItem(SOCIAL_MESSAGES_KEY);
+        if (!rawMsgs) return;
+        const stored = JSON.parse(rawMsgs) as StoredEncryptedMessage[];
+        if (!Array.isArray(stored)) return;
+        const decrypted: DecryptedChatItem[] = [];
+        for (const item of stored) {
+          const peer = loadedFriends.find((f) => f.uid === item.recipientUid);
+          if (!peer) continue;
+          try {
+            const plain = peer.privateKeyJwk
+              ? await decryptE2EEMessage(item, peer.privateKeyJwk)
+              : await decryptE2EEMessage(item, ownKeys.privateKeyJwk, peer.publicKeyJwk);
+            decrypted.push({
+              id: item.id,
+              senderName: item.senderName,
+              recipientUid: item.recipientUid,
+              plaintext: plain,
+              ciphertext: item.ciphertext,
+              iv: item.iv,
+              timestamp: item.timestamp,
+              syncedCloud: item.syncedCloud,
+            });
+          } catch {
+            // Skip envelopes from rotated keys
+          }
+        }
+        if (active && decrypted.length > 0) {
+          setMessages(decrypted);
+        }
+      } catch {
+        // ignore storage parse errors
+      }
     }
     void initPeers();
     return () => {
       active = false;
     };
-  }, []);
+  }, [ownKeys]);
+
+  // Subscribe to real-time Firestore encrypted direct messages when authenticated
+  useEffect(() => {
+    if (!user || !ownKeys || !isOnline) return;
+    const unsub = subscribeUserMessages(
+      user.uid,
+      async (cloudRows) => {
+        const additions: DecryptedChatItem[] = [];
+        for (const row of cloudRows) {
+          const peerUid = row.senderUid === user.uid ? row.recipientUid : row.senderUid;
+          const peer = friends.find((f) => f.uid === peerUid);
+          try {
+            const plain = await decryptE2EEMessage(
+              {
+                ciphertext: row.ciphertext,
+                iv: row.iv,
+                senderPublicKey: row.senderPublicKey,
+              },
+              ownKeys.privateKeyJwk,
+              row.senderUid === user.uid ? peer?.publicKeyJwk : row.senderPublicKey,
+            );
+            additions.push({
+              id: row.id,
+              senderName: row.senderName,
+              recipientUid: peerUid,
+              plaintext: plain,
+              ciphertext: row.ciphertext,
+              iv: row.iv,
+              timestamp: 'Cloud',
+              syncedCloud: true,
+            });
+          } catch {
+            // Skip messages encrypted for another keypair
+          }
+        }
+        if (additions.length > 0) {
+          setMessages((prev) => {
+            const seen = new Set(prev.map((m) => m.id));
+            const merged = [...prev];
+            for (const item of additions) {
+              if (!seen.has(item.id)) merged.push(item);
+            }
+            return merged;
+          });
+        }
+      },
+      () => {},
+    );
+    return () => unsub();
+  }, [user, ownKeys, isOnline, friends]);
 
   const handleAddFriend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +235,15 @@ export const SocialE2EETab: React.FC<SocialE2EETabProps> = ({
       publicKeyJwk: keys.publicKeyJwk,
       privateKeyJwk: keys.privateKeyJwk,
     };
-    setFriends((prev) => [newFriend, ...prev]);
+    setFriends((prev) => {
+      const next = [newFriend, ...prev];
+      try {
+        localStorage.setItem(SOCIAL_FRIENDS_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
     setSelectedFriendUid(uid);
     setInviteHandle('');
     setInviteFeedback(`Added ${newFriend.name} with ECDH P-256 key exchange.`);
@@ -151,19 +281,34 @@ export const SocialE2EETab: React.FC<SocialE2EETabProps> = ({
         onQueueOfflineMessage({ recipientUid: peer.uid, ...envelope });
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `m_${Date.now()}`,
-          senderName: user?.displayName || 'You',
-          recipientUid: peer.uid,
-          plaintext: verifiedPlain,
+      const msgItem: DecryptedChatItem = {
+        id: `m_${Date.now()}`,
+        senderName: user?.displayName || 'You',
+        recipientUid: peer.uid,
+        plaintext: verifiedPlain,
+        ciphertext: envelope.ciphertext,
+        iv: envelope.iv,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        syncedCloud,
+      };
+      setMessages((prev) => [...prev, msgItem]);
+      try {
+        const raw = localStorage.getItem(SOCIAL_MESSAGES_KEY);
+        const existing: StoredEncryptedMessage[] = raw ? (JSON.parse(raw) as StoredEncryptedMessage[]) : [];
+        const storedEntry: StoredEncryptedMessage = {
+          id: msgItem.id,
+          senderName: msgItem.senderName,
+          recipientUid: msgItem.recipientUid,
           ciphertext: envelope.ciphertext,
           iv: envelope.iv,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          senderPublicKey: envelope.senderPublicKey,
+          timestamp: msgItem.timestamp,
           syncedCloud,
-        },
-      ]);
+        };
+        localStorage.setItem(SOCIAL_MESSAGES_KEY, JSON.stringify([...existing, storedEntry].slice(-60)));
+      } catch {
+        // ignore storage quota errors
+      }
       setMessageInput('');
     } finally {
       setSending(false);
