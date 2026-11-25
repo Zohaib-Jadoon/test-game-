@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Public non-PII pilot profile for leaderboards, friend discovery, and E2EE public key exchange.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "rigId": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "bestScore": { "type": "integer" },
+        "highestWave": { "type": "integer" },
+        "publicKeyJwk": { "type": "string", "maxLength": 1024 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "rigId", "bestScore", "highestWave", "publicKeyJwk", "createdAt", "updatedAt"]
+    },
+    "PrivateAccount": {
+      "title": "PrivateAccount",
+      "description": "Owner-only PII and preferences isolated under split collection.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 160 },
+        "locale": { "type": "string", "enum": ["en", "es", "ja", "fr"] },
+        "darkMode": { "type": "boolean" },
+        "biometricEnabled": { "type": "boolean" },
+        "notificationsEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "locale", "darkMode", "biometricEnabled", "notificationsEnabled", "createdAt", "updatedAt"]
+    },
+    "CloudSave": {
+      "title": "CloudSave",
+      "description": "Cross-platform player progression synced across mobile and desktop.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deviceName": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "platform": { "type": "string", "enum": ["mobile", "tablet", "desktop"] },
+        "highestWave": { "type": "integer" },
+        "bestScore": { "type": "integer" },
+        "totalKills": { "type": "integer" },
+        "preferredRig": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "deviceName", "platform", "highestWave", "bestScore", "totalKills", "preferredRig", "createdAt", "updatedAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Real-time competitive arena run score (no PII).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "score": { "type": "integer" },
+        "wave": { "type": "integer" },
+        "kills": { "type": "integer" },
+        "mode": { "type": "string", "enum": ["solo", "coop2p", "duel2p"] },
+        "rigUsed": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "score", "wave", "kills", "mode", "rigUsed", "createdAt", "updatedAt"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Social friend relationship and invite status between two pilots.",
+      "type": "object",
+      "properties": {
+        "requesterUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "requesterName": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "recipientName": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requesterUid", "recipientUid", "requesterName", "recipientName", "status", "createdAt", "updatedAt"]
+    },
+    "EncryptedMessage": {
+      "title": "EncryptedMessage",
+      "description": "End-to-end encrypted direct message payload using Web Crypto ECDH + AES-GCM.",
+      "type": "object",
+      "properties": {
+        "senderUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "ciphertext": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "iv": { "type": "string", "minLength": 8, "maxLength": 64 },
+        "senderPublicKey": { "type": "string", "minLength": 16, "maxLength": 1024 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderUid", "recipientUid", "senderName", "ciphertext", "iv", "senderPublicKey", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/public/{docId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Non-PII public profile and E2EE public key."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/PrivateAccount" },
+      "description": "Owner-only private account data and PII."
+    },
+    "/users/{userId}/saves/{saveId}": {
+      "schema": { "$ref": "#/entities/CloudSave" },
+      "description": "Owner-only cross-platform cloud save snapshots."
+    },
+    "/leaderboards/{entryId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Publicly readable real-time competitive leaderboard entries."
+    },
+    "/friendships/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Friend invitations and accepted connections scoped to participants."
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/EncryptedMessage" },
+      "description": "End-to-end encrypted direct messages scoped strictly to sender and recipient."
+    }
+  }
+}

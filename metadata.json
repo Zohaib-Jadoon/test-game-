@@ -1,0 +1,6 @@
+{
+  "name": "Skyforge Arena",
+  "description": "3D indie mobile & desktop action-arena game with Blender GLTF/FBX custom character import, local 2-player multiplayer, real-time Firebase leaderboards, E2EE social chat, Cloud SQL cross-platform saves, offline PWA support, and Gemini tactical coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

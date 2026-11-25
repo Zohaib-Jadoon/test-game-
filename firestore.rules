@@ -1,0 +1,231 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Blueprint Validators (Anti-Update-Gap)
+    function isValidPublicProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'rigId', 'bestScore', 'highestWave', 'publicKeyJwk', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'rigId', 'bestScore', 'highestWave', 'publicKeyJwk', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 48
+        && data.rigId is string && data.rigId.size() >= 1 && data.rigId.size() <= 32
+        && data.bestScore is int && data.bestScore >= 0 && data.bestScore <= 99999999
+        && data.highestWave is int && data.highestWave >= 1 && data.highestWave <= 999
+        && data.publicKeyJwk is string && data.publicKeyJwk.size() <= 1024
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateAccount(data) {
+      return data.keys().hasAll(['uid', 'email', 'locale', 'darkMode', 'biometricEnabled', 'notificationsEnabled', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'locale', 'darkMode', 'biometricEnabled', 'notificationsEnabled', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.locale in ['en', 'es', 'ja', 'fr']
+        && data.darkMode is bool
+        && data.biometricEnabled is bool
+        && data.notificationsEnabled is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCloudSave(data) {
+      return data.keys().hasAll(['uid', 'deviceName', 'platform', 'highestWave', 'bestScore', 'totalKills', 'preferredRig', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'deviceName', 'platform', 'highestWave', 'bestScore', 'totalKills', 'preferredRig', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.deviceName is string && data.deviceName.size() >= 1 && data.deviceName.size() <= 64
+        && data.platform in ['mobile', 'tablet', 'desktop']
+        && data.highestWave is int && data.highestWave >= 1 && data.highestWave <= 999
+        && data.bestScore is int && data.bestScore >= 0 && data.bestScore <= 99999999
+        && data.totalKills is int && data.totalKills >= 0 && data.totalKills <= 9999999
+        && data.preferredRig is string && data.preferredRig.size() >= 1 && data.preferredRig.size() <= 32
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'kills', 'mode', 'rigUsed', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'kills', 'mode', 'rigUsed', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 48
+        && data.score is int && data.score >= 0 && data.score <= 99999999
+        && data.wave is int && data.wave >= 1 && data.wave <= 999
+        && data.kills is int && data.kills >= 0 && data.kills <= 999999
+        && data.mode in ['solo', 'coop2p', 'duel2p']
+        && data.rigUsed is string && data.rigUsed.size() >= 1 && data.rigUsed.size() <= 32
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFriendship(data) {
+      return data.keys().hasAll(['requesterUid', 'recipientUid', 'requesterName', 'recipientName', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['requesterUid', 'recipientUid', 'requesterName', 'recipientName', 'status', 'createdAt', 'updatedAt'])
+        && data.requesterUid is string && data.requesterUid.size() >= 1 && data.requesterUid.size() <= 128 && data.requesterUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128 && data.recipientUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.requesterUid != data.recipientUid
+        && data.requesterName is string && data.requesterName.size() >= 1 && data.requesterName.size() <= 48
+        && data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 48
+        && data.status in ['pending', 'accepted', 'declined']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEncryptedMessage(data) {
+      return data.keys().hasAll(['senderUid', 'recipientUid', 'senderName', 'ciphertext', 'iv', 'senderPublicKey', 'createdAt'])
+        && data.keys().hasOnly(['senderUid', 'recipientUid', 'senderName', 'ciphertext', 'iv', 'senderPublicKey', 'createdAt'])
+        && data.senderUid is string && data.senderUid.size() >= 1 && data.senderUid.size() <= 128 && data.senderUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.senderUid == request.auth.uid
+        && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128 && data.recipientUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 48
+        && data.ciphertext is string && data.ciphertext.size() >= 1 && data.ciphertext.size() <= 4096
+        && data.iv is string && data.iv.size() >= 8 && data.iv.size() <= 64
+        && data.senderPublicKey is string && data.senderPublicKey.size() >= 16 && data.senderPublicKey.size() <= 1024
+        && data.createdAt is timestamp;
+    }
+
+    // Split Collection: Public Non-PII Profiles
+    match /users/{userId}/public/{docId} {
+      allow get: if isSignedIn() && isValidId(userId) && isValidId(docId);
+      allow list: if isSignedIn() && resource.data.uid == userId;
+      allow create: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(docId)
+        && isValidPublicProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(docId)
+        && isValidPublicProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'rigId', 'bestScore', 'highestWave', 'publicKeyJwk', 'updatedAt']);
+      allow delete: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(docId);
+    }
+
+    // Split Collection: Owner-Only Private PII Account
+    match /users/{userId}/private/{docId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(docId);
+      allow list: if isOwner(userId) && resource.data.uid == request.auth.uid;
+      allow create: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(docId)
+        && isValidPrivateAccount(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(docId)
+        && isValidPrivateAccount(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'locale', 'darkMode', 'biometricEnabled', 'notificationsEnabled', 'updatedAt']);
+      allow delete: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(docId);
+    }
+
+    // Cross-Platform Cloud Saves (Owner-Only)
+    match /users/{userId}/saves/{saveId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(saveId);
+      allow list: if isOwner(userId) && resource.data.uid == request.auth.uid;
+      allow create: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(saveId)
+        && isValidCloudSave(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(saveId)
+        && isValidCloudSave(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['deviceName', 'platform', 'highestWave', 'bestScore', 'totalKills', 'preferredRig', 'updatedAt']);
+      allow delete: if isVerified() && isOwner(userId) && isValidId(userId) && isValidId(saveId);
+    }
+
+    // Real-Time Leaderboards (Public Non-PII Scores, Owner-Only Writes)
+    match /leaderboards/{entryId} {
+      allow get: if isValidId(entryId) && existing().score is int;
+      allow list: if resource.data.score is int && resource.data.score >= 0;
+      allow create: if isVerified() && isValidId(entryId)
+        && isValidLeaderboardEntry(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(entryId)
+        && isValidLeaderboardEntry(incoming())
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'score', 'wave', 'kills', 'mode', 'rigUsed', 'updatedAt']);
+      allow delete: if isVerified() && isValidId(entryId) && existing().uid == request.auth.uid;
+    }
+
+    // Social Friendships (Scoped strictly to participants, terminal state locked on 'declined')
+    match /friendships/{friendshipId} {
+      allow get: if isSignedIn() && isValidId(friendshipId)
+        && (existing().requesterUid == request.auth.uid || existing().recipientUid == request.auth.uid);
+      allow list: if isSignedIn()
+        && (resource.data.requesterUid == request.auth.uid || resource.data.recipientUid == request.auth.uid);
+      allow create: if isVerified() && isValidId(friendshipId)
+        && isValidFriendship(incoming())
+        && incoming().requesterUid == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(friendshipId)
+        && isValidFriendship(incoming())
+        && existing().status != 'declined'
+        && incoming().requesterUid == existing().requesterUid
+        && incoming().recipientUid == existing().recipientUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (existing().recipientUid == request.auth.uid
+            && existing().status == 'pending'
+            && incoming().status in ['accepted', 'declined']
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(friendshipId)
+        && (existing().requesterUid == request.auth.uid || existing().recipientUid == request.auth.uid);
+    }
+
+    // End-to-End Encrypted Direct Messages (Immutable after creation, participant-only read)
+    match /messages/{messageId} {
+      allow get: if isSignedIn() && isValidId(messageId)
+        && (existing().senderUid == request.auth.uid || existing().recipientUid == request.auth.uid);
+      allow list: if isSignedIn()
+        && (resource.data.senderUid == request.auth.uid || resource.data.recipientUid == request.auth.uid);
+      allow create: if isVerified() && isValidId(messageId)
+        && isValidEncryptedMessage(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(messageId) && existing().senderUid == request.auth.uid;
+    }
+  }
+}
