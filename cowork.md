@@ -1,0 +1,51 @@
+# EIDRATH — cowork.md
+## Shift handoff: ChatGPT • 2026-11-26 (Pakistan time)
+
+Repository: https://github.com/Zohaib-Jadoon/test-game-
+Upstream reviewed: eidrath/overhaul @ fa829cf5ed17c7ab769bfcb31dd77c05e1234643.
+Work branch: eidrath/native-cowork (same repo, based on the actual overhaul, not the old main).
+Main and eidrath/overhaul are not overwritten. Do not force-push, reset or delete local work. Inspect git status before switching.
+All work in this shift is source changes and documentation; no paid services, new paid tools or third-party binaries were acquired.
+
+## What I actually changed
+- 495ab6282e64944fbee0402983b8f1ba20175638: animation state transitions, one-shot final events, explicit restarts for repeated player attacks, non-warped fades; camera resolves the actual smoothed shoulder boom and ignores hidden ancestors; held input cleanup on focus/menu/title/dialogue/death/load; charge tracked by initiating mouse button (not Shift on release); preserve buffered heavy charge; prevent duplicate touch+click actions, release guard on cancellation, track joystick touch ID; walk speed and collision-resolved animation speed; play death mixer when dead; actual weapon-weight stamina affordability; stricter v1 save validation, preserve good backup over corrupt primary, reject cross-slot data, report storage failure; remove unconditional visual approval, retry failed asset loads; regression test additions.
+- ad957ef369c600fef7591ddbb313a3bac3d58f13: consume release once in active phase, not during windup (bow/frost projectiles, melee sounds, magic effects); fix chest interaction reset when another save is loaded; prevent combat fast-travel and reset camera/velocity on travel; correct collision clearance recovery; keep a separate winter gradient sky and HDRI reflections, retry failed HDRI loads, dispose PMREM targets and sky textures; derive runtime visual approval from per-asset manifest evidence; touch mode cleanup; TS JSON module resolution; further regression tests.
+- 51a3a48039d572a875bc52890b48de14107dd375: portable roots for selected asset scripts, Blender executable override; QA harness supports headed and no-recording runs and records request failures; avoid overwriting credits without source caches; asset review evidence guards; developer drawer exposes actual visual verdict; inventory preview renderer cleanup; game.md scope and license notes.
+- This handoff and docs/NATIVE_ENGINE_TRIAL.md: actionable next shift and engine experiment specification.
+
+## Verified versus unverified
+VERIFIED: GitHub remote branch and exact upstream SHA; reviewed actual source, historical QA reports, screenshots and previous recording as supplied in conversation; created source commits through GitHub API. The old report's 16/16 tests, 19–22 FPS under recording, and zero browser errors are historical, not tests of these commits.
+NOT RUN: npm ci, npm run lint, npm test, npm run build, factory verify, Playwright, physical GPU and mobile input, actual Blender import, engine installation, native executable build. Direct git access in the ChatGPT container failed with DNS resolution; no Three.js dependencies or installed Unity/Godot/Blender executable available there. New regression tests are authored but NOT executed. Do not mark fixes visually accepted until locally tested. No AAA claims. The new sky is a simple coherent gradient, not a finished photoreal sky. Current melee hit detection remains arc/range-based, not swept blade collision. No engine migration has been performed. Some older Blender scripts still contain workstation-specific paths; audit and replace them before rebuilding.
+
+## Antigravity: first actions
+1. Finish any local work, inspect git status and commit or stash it as appropriate. Do not open a new project folder unnecessarily. Fetch origin. Review changes against eidrath/overhaul. In a clean checkout switch to the cowork branch or merge it into your active work with a normal fast-forward/merge. Commands:
+   ```powershell
+   git fetch origin
+   git status --short
+   git switch eidrath/overhaul
+   git merge --ff-only origin/eidrath/native-cowork
+   git log -5 --oneline
+   ```
+   If the local branch has diverged, inspect the diff and reconcile normally; never use reset --hard or force push. Keep main untouched until acceptance.
+2. Read game.md, docs/NATIVE_ENGINE_TRIAL.md, previous DEVELOPMENT_PROGRESS.md and GAMEPLAY_QA_REPORT.md. Run npm ci, npm run lint, npm test, npm run build, factory verify. Fix actual failures, do not bypass the scanner. The previous Firebase/drizzle flags still require evidence-based review.
+3. Run the app, then the existing browser smoke test. For unbiased performance use PowerShell:
+   ```powershell
+   $env:EIDRATH_QA_URL = 'http://127.0.0.1:3100'
+   $env:EIDRATH_QA_RECORD = '0'
+   $env:EIDRATH_QA_HEADLESS = '0'
+   python tools/qa/verify_eidrath_webgl.py
+   ```
+   Start the production server in a separate terminal first. Measure the same route separately with recording on; record actual game sound via a local capture tool. Verify actual physical touch on mobile. Save the logs and hardware specs. Do not relabel requestAnimationFrame cadence as GPU-only FPS.
+4. Manually reproduce the defects: shift down + left mouse down, release shift before mouse; cancel heavy with pause/blur; tap attack once on touch; press and release parry including cancellation; repeatedly use same heavy/combos; dodge mid bow windup (must not launch); test under insufficient stamina; open inventory repeatedly; reload earlier unopened chest state; corrupted JSON and missing fields; quota denial; walk into wall; camera backing toward wall and shoulder switch; death animation; travel while combat active.
+5. Review the 60 runtime GLBs individually in actual gameplay. Historical blanket approval has been reset intentionally. Supply a JSON evidence map keyed by asset ID: { "chr_kaelen": { "sha256": "<actual GLB SHA256>", "reviewer": "<reviewer>", "evidence": "art/qa/<actual review capture>.png", "verdict": "approved" } }. Use rejected for inadequate models. Run python tools/assets/generate_asset_manifest.py --qa-evidence <path>. Evidence must match current exact bytes and exist within repo. Do not use the old --approve-inspected flag. Do not auto-approve. Keep asset rights separate from visual approval. The UI uses this manifest. Verify hashes in release QA; re-export invalidates previous evidence.
+6. Evaluate native engines immediately after the regression baseline. User has explicitly authorized free engine installation/migration; no paid purchases, subscriptions, SDKs or assets. Do not request routine confirmation. If a free login, admin prompt or local license acceptance is necessary, document and continue other tasks. Do not close/restart Antigravity or the PC. Keep same repo and existing reference code until the chosen engine demonstrates the quality/performance gate.
+7. Before next ChatGPT shift, commit and push the active shared branch, append dated notes to this file including exact SHA, changes, verified commands/results, blockers, screenshots and clear next tasks. Tell user branch name. No agents concurrently changing same branch.
+
+## Remaining P0/P1 work
+P0: locally compile/test these patches and fix any regressions. Confirm all save fields and settings migration; IndexedDB mirror has no read recovery and can retain deleted slots (decide explicit async recovery contract). Fix old-save world reconciliation for rune resets, ordinary enemy respawns, boss seals/armor restoration and stale effects. Guard concurrent async weapon refresh and dev actor mixer rebind; preview currently only visibly changes Kaelen. Shared mesh/material disposal and texture ownership need explicit lifecycle management. Confirm native benchmark or choose engine after actual local evidence.
+P1: real swept weapon collision, attack animation marker and timeline synchronization, projectile obstruction, directional dodge, actual rigid/character collisions rather than circles, pathfinding and camera sphere sweep (including dialogue/boss intro and instanced trees); distinguish NPC death/AI state and camera cut/teleport reset; inspect sound output; complete high-quality original/licensed environments, HUD and asset replacements. Restore complete original narrative specification if missing; current game.md is only the Frostheim slice. Preserve quest IDs, inventory/equipment, story choices and save migration.
+P1 licensing: verify individual licenses for all example motion models/derivatives (repository source-code MIT does not prove individual asset redistribution rights). Audit all public tracked third-party raw files, including legacy references. Preserve attributions, quarantine uncertain assets for release, no ripped assets. Never claim verified source license without evidence.
+P2: expand other six kingdoms only after realistic first slice passes. Native Windows package, install/build documentation, playable QA capture including sound and performance report.
+
+## Collaboration rules
+Daytime Antigravity until 20:00 PKT; ChatGPT works when requested. Each shift pulls latest code and reads this file. Free-only tools and assets; no paid or restricted purchases. Maintain evidence-backed approvals. No routine confirmations, no fabricated results. Keep existing repo and original lore. Current handoff does not establish that the game is complete.
