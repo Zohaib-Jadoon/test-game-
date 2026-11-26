@@ -389,7 +389,7 @@ MIXAMO_TO_MPFB = {
 }
 
 
-def retarget_mixamo_action(target_rig, src_glb: Path, src_action_name: str, out_clip_name: str, step: int = 2, max_frames: int = 90):
+def retarget_mixamo_action(target_rig, src_glb: Path, src_action_name: str, out_clip_name: str, step: int = 1, max_frames: int | None = None):
     """Import MIT Mixamo reference GLB temporarily and retarget its action onto target_rig."""
     if not src_glb.exists():
         return None
@@ -417,7 +417,10 @@ def retarget_mixamo_action(target_rig, src_glb: Path, src_action_name: str, out_
     src_arm.animation_data_create()
     src_arm.animation_data.action = src_act
     f0 = int(round(src_act.frame_range[0]))
-    f1 = min(int(round(src_act.frame_range[1])), f0 + max_frames)
+    f1 = int(round(src_act.frame_range[1]))
+    if max_frames is not None:
+        f1 = min(f1, f0 + max_frames)
+    # Sample the complete source cycle, including its exact last frame.
 
     target_rig.animation_data_create()
     out_act = bpy.data.actions.new(name=out_clip_name)
@@ -464,7 +467,10 @@ def retarget_mixamo_action(target_rig, src_glb: Path, src_action_name: str, out_
 
     out_frame = 1
     keyed_bones = set(MIXAMO_TO_MPFB.values()) | {"Cloak_1", "Cloak_2", "Cloak_3"}
-    for fr in range(f0, f1 + 1, step):
+    previous_quats = {}
+    sample_frames = sorted(set(range(f0, f1 + 1, step)) | {f1})
+    for fr in sample_frames:
+        out_frame = 1 + fr - f0
         bpy.context.scene.frame_set(fr)
         bpy.context.view_layer.update()
 
@@ -507,11 +513,16 @@ def retarget_mixamo_action(target_rig, src_glb: Path, src_action_name: str, out_
 
         for pb in tpose:
             if pb.name in keyed_bones:
+                # Keep quaternion hemispheres continuous to avoid interpolation flips.
+                q = pb.rotation_quaternion.copy()
+                previous = previous_quats.get(pb.name)
+                if previous is not None and q.dot(previous) < 0:
+                    q.negate()
+                pb.rotation_quaternion = q
+                previous_quats[pb.name] = q.copy()
                 pb.keyframe_insert(data_path="rotation_quaternion", frame=out_frame)
             if pb.name == "pelvis":
                 pb.keyframe_insert(data_path="location", frame=out_frame)
-        out_frame += step
-
     # Clean up temporary imported Mixamo objects & actions
     for o in new_objs:
         bpy.data.objects.remove(o, do_unlink=True)
@@ -709,10 +720,11 @@ def hero_clip_library():
 def apply_standard_mocap_and_clips(rig, full_hero: bool = True):
     """Retarget real Mixamo Idle/Walk/Run/CrouchIdle from Xbot.glb onto MPFB2 rig + author combat/movement clips."""
     xbot = MOCAP_DIR / "Xbot.glb"
-    retarget_mixamo_action(rig, xbot, "idle", "Idle", step=2, max_frames=60)
-    retarget_mixamo_action(rig, xbot, "walk", "Walk", step=1, max_frames=24)
-    retarget_mixamo_action(rig, xbot, "run", "Run", step=1, max_frames=18)
-    retarget_mixamo_action(rig, xbot, "sneak_pose", "CrouchIdle", step=2, max_frames=20)
+    # Preserve full authored mocap cycles instead of cutting a stride in half.
+    retarget_mixamo_action(rig, xbot, "idle", "Idle")
+    retarget_mixamo_action(rig, xbot, "walk", "Walk")
+    retarget_mixamo_action(rig, xbot, "run", "Run")
+    retarget_mixamo_action(rig, xbot, "sneak_pose", "CrouchIdle")
 
     specs = hero_clip_library()
     if not full_hero:

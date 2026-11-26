@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import * as THREE from 'three';
 import { AnimationController } from './animation/AnimationController';
+import { attackPoseProgress, damp, motionSubsteps, selectGait } from './animation/motionMath';
 import { CinematicCamera } from './camera/CinematicCamera';
 
 import {
@@ -468,4 +469,20 @@ test('Cowork: projectiles and swing sounds release only once in the active phase
   startAttackAction(cancelled, 'bow_shot', 100, 100);
   startDodgeAction(cancelled, 100);
   assert.equal(consumeAttackRelease(cancelled), null);
+});
+
+test('Motion: frame-rate independent damping, bounded substeps and gait hysteresis', () => {
+  assert.ok(Math.abs(damp(damp(0, 5, 11, 0.05), 5, 11, 0.05) - damp(0, 5, 11, 0.1)) < 1e-9);
+  assert.ok(Math.abs(motionSubsteps(0.08).reduce((a, b) => a + b, 0) - 0.08) < 1e-9);
+  assert.equal(selectGait('Run', 4.4, false), 'Run');
+  assert.equal(selectGait('Walk', 4.4, false), 'Walk');
+  assert.equal(selectGait('Sprint', 5.8, false), 'Sprint');
+  assert.equal(selectGait('Idle', 0.2, false), 'Idle');
+  assert.equal(selectGait('Run', 5, true), 'Walk');
+});
+test('Motion: animation hits authored pose at combat boundaries', () => {
+  assert.equal(attackPoseProgress(0, 150, 120, 230, .28, .62), 0);
+  assert.equal(attackPoseProgress(150, 150, 120, 230, .28, .62), .28);
+  assert.equal(attackPoseProgress(270, 150, 120, 230, .28, .62), .62);
+  assert.equal(attackPoseProgress(500, 150, 120, 230, .28, .62), 1);
 });

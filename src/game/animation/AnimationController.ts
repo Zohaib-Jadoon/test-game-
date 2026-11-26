@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { attackPoseProgress } from './motionMath';
 
 export interface AnimEventSpec {
   id: 'foot_left' | 'foot_right' | 'swing_whoosh' | 'hitbox_start' | 'hitbox_end' | 'cast_release' | 'weapon_draw' | 'weapon_sheathe';
@@ -70,6 +71,8 @@ export class AnimationController {
   private currentKey = '';
   private currentRequest = '';
   private currentLoop = true;
+  private targetTimeScale = 1;
+  private attackPoseDriven = false;
   private currentAction: THREE.AnimationAction | null = null;
   private prevNormTime = 0;
   private firedThisLoop = new Set<string>();
@@ -137,7 +140,7 @@ export class AnimationController {
     const timeScale = options.timeScale ?? 1.0;
 
     if (this.currentKey === key && this.currentRequest === name.toLowerCase() && this.currentLoop === loop && !options.forceRestart && this.currentAction) {
-      this.currentAction.setEffectiveTimeScale(timeScale);
+      this.targetTimeScale = timeScale;
       return;
     }
 
@@ -148,36 +151,66 @@ export class AnimationController {
       this.actions.set(key, nextAction);
     }
 
+    const locomotion = /^(walk|walkback|run|sprint|strafeleft|straferight|crouchwalk)$/;
+    const previous = this.currentAction;
+    const preservePhase = Boolean(previous && loop && this.currentLoop && !options.forceRestart && locomotion.test(this.currentRequest) && locomotion.test(name.toLowerCase()));
+    const phase = preservePhase && previous ? (previous.time / Math.max(previous.getClip().duration, 0.001)) % 1 : 0;
     nextAction.reset();
     nextAction.enabled = true;
     nextAction.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     nextAction.clampWhenFinished = !loop;
     nextAction.setEffectiveTimeScale(timeScale);
     nextAction.setEffectiveWeight(1.0);
+    nextAction.time = phase * nextAction.getClip().duration;
+    this.targetTimeScale = timeScale;
+    this.attackPoseDriven = false;
 
     if (this.currentAction && this.currentAction !== nextAction) {
       nextAction.play();
       this.currentAction.crossFadeTo(nextAction, fadeSec, false);
     } else {
-      nextAction.fadeIn(fadeSec).play();
+      // Restarting the same action must not fade through the unanimated bind pose.
+      nextAction.play();
     }
 
     this.currentKey = key;
     this.currentRequest = name.toLowerCase();
     this.currentLoop = loop;
     this.currentAction = nextAction;
-    this.prevNormTime = 0;
+    this.prevNormTime = phase;
     this.firedThisLoop.clear();
+    // Mark events before the retained gait phase as already consumed.
+    for (const ev of CLIP_EVENTS[name.toLowerCase()] ?? CLIP_EVENTS[key] ?? []) {
+      if (ev.normTime <= phase) this.firedThisLoop.add(`${ev.id}_${ev.normTime}`);
+    }
   }
 
   public setSpeedSync(actualSpeedMps: number, referenceSpeedMps: number): void {
     if (!this.currentAction || referenceSpeedMps <= 0.1) return;
     const ratio = Math.max(0.55, Math.min(1.65, actualSpeedMps / referenceSpeedMps));
-    this.currentAction.setEffectiveTimeScale(ratio);
+    this.targetTimeScale = ratio;
+  }
+
+  /** Drive attack clips from the same authoritative timeline as damage and release. */
+  public syncAttackPose(elapsedMs: number, windupMs: number, activeMs: number, recoveryMs: number): void {
+    if (!this.currentAction || this.currentLoop) return;
+    const specs = CLIP_EVENTS[this.currentRequest] ?? CLIP_EVENTS[this.currentKey] ?? [];
+    const start = specs.find((event) => event.id === 'hitbox_start' || event.id === 'cast_release')?.normTime ?? 0.35;
+    const end = specs.find((event) => event.id === 'hitbox_end')?.normTime ?? Math.max(start + 0.15, 0.7);
+    const progress = attackPoseProgress(elapsedMs, windupMs, activeMs, recoveryMs, start, end);
+    this.attackPoseDriven = true;
+    this.currentAction.enabled = true;
+    this.currentAction.paused = false;
+    this.currentAction.setEffectiveTimeScale(0);
+    this.currentAction.time = Math.min(this.currentAction.getClip().duration - 0.00001, progress * this.currentAction.getClip().duration);
   }
 
   public update(dtSec: number): void {
     if (!this.mixer) return;
+    if (this.currentAction && !this.attackPoseDriven) {
+      const current = this.currentAction.getEffectiveTimeScale();
+      this.currentAction.setEffectiveTimeScale(current + (this.targetTimeScale - current) * (1 - Math.exp(-12 * dtSec)));
+    }
     this.mixer.update(dtSec);
 
     if (!this.currentAction || !this.callbacks.onEvent) return;
@@ -190,7 +223,7 @@ export class AnimationController {
     const norm = this.currentLoop
       ? (this.currentAction.time % dur) / dur
       : Math.max(0, Math.min(1, this.currentAction.time / dur));
-    const specs = CLIP_EVENTS[this.currentKey] ?? [];
+    const specs = CLIP_EVENTS[this.currentRequest] ?? CLIP_EVENTS[this.currentKey] ?? [];
     const emitThrough = (end: number) => {
       for (const ev of specs) {
         const key = `${ev.id}_${ev.normTime}`;
@@ -214,6 +247,7 @@ export class AnimationController {
     this.currentAction = null;
     this.currentKey = '';
     this.currentRequest = '';
+    this.attackPoseDriven = false;
     this.firedThisLoop.clear();
   }
 }

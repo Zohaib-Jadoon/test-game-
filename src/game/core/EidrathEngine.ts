@@ -16,6 +16,8 @@ import {
 } from '../assets/manifest';
 import { EidrathAudio, type MusicZone } from '../audio/eidrathAudio';
 import { AnimationController } from '../animation/AnimationController';
+import { damp, motionSubsteps, selectGait } from '../animation/motionMath';
+import { loadReadyTitle, loadReadyZones, type LoadedReadyZone } from '../assets/readyScenes';
 import { CinematicCamera } from '../camera/CinematicCamera';
 import { CombatVfx } from '../combat/CombatVfx';
 import { createSoftSnowSpriteTexture, RealisticRenderer } from '../rendering/RealisticRenderer';
@@ -257,6 +259,12 @@ export class EidrathEngine {
   private kaelen: InstantiatedActor | null = null;
   private kaelenCtrl: AnimationController | null = null;
   private kaelenClip = '';
+  private gait: 'Idle' | 'Walk' | 'Run' | 'Sprint' = 'Idle';
+  private actualMoveSpeed = 0;
+  private dodgeX = 0;
+  private dodgeZ = 1;
+  private readyZones: LoadedReadyZone[] = [];
+  private authoredTitleCamera: { position: THREE.Vector3; target: THREE.Vector3 } | null = null;
   private weaponDrawn = true;
   private outOfCombatSec = 0;
   private walkToggled = false;
@@ -406,6 +414,13 @@ export class EidrathEngine {
   }
 
   private async buildTitleBackdrop(): Promise<void> {
+    const authored = await loadReadyTitle();
+    if (this.disposed) return;
+    if (authored) {
+      this.titleGroup.add(authored.root);
+      this.authoredTitleCamera = { position: authored.position, target: authored.target };
+      return;
+    }
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(36, 40).rotateX(-Math.PI / 2),
       new THREE.MeshStandardMaterial({ color: '#8e9ca8', roughness: 0.9, metalness: 0.04 }),
@@ -601,6 +616,9 @@ export class EidrathEngine {
     colliderId?: string,
   ): Promise<THREE.Object3D> {
     const y = getTerrainHeight(x, z);
+    if (assetId.startsWith('env_') && this.readyZones.some(zone => zone.omit.has(assetId) && Math.hypot(x - zone.x, z - zone.z) <= zone.radius)) {
+      return new THREE.Group(); // Approved authored zone supplies the visual architecture.
+    }
     const group = await instantiateStaticAsset(assetId, scale);
     group.position.set(x, y, z);
     group.rotation.y = rotY;
@@ -628,6 +646,13 @@ export class EidrathEngine {
     this.worldGroup.add(frozenLake);
     this.worldGroup.add(horizons);
     this.collisionMeshes.push(terrain);
+    this.readyZones = await loadReadyZones();
+    for (const zone of this.readyZones) {
+      zone.root.position.y += getTerrainHeight(zone.x, zone.z);
+      this.addToChunk(zone.root, zone.x, zone.z);
+      this.collisionMeshes.push(zone.root);
+      for (const [index, col] of zone.colliders.entries()) this.colliders.push({ id: `ready_${zone.id}_${index}`, x: col.x, z: col.z, radius: col.radius, active: true });
+    }
 
     // 2. Load hero Kaelen + companion Lyra + AnimationControllers
     this.kaelen = await instantiateSkinnedActor('chr_kaelen');
@@ -636,7 +661,8 @@ export class EidrathEngine {
       onEvent: (ev) => {
         if (ev === 'foot_left' || ev === 'foot_right') {
           const surface = getSurfaceKindAt(this.save.player.x, this.save.player.z);
-          const sprinting = Math.hypot(this.playerVelX, this.playerVelZ) > 6.2;
+          if (this.actualMoveSpeed < 0.3 || !this.playerGrounded) return;
+          const sprinting = this.actualMoveSpeed > 6.2;
           this.audio.playFootstep(sprinting, surface);
           if (surface === 'snow' && sprinting) {
             this.combatVfx.spawnSnowDust(new THREE.Vector3(this.save.player.x, this.save.player.y, this.save.player.z), 3);
@@ -1013,6 +1039,7 @@ export class EidrathEngine {
           const tx = (rand() - 0.5) * 390;
           const tz = (rand() - 0.5) * 390;
           if (!isClearForTree(tx, tz)) continue;
+          if (this.readyZones.some(zone => zone.omit.has(assetId) && Math.hypot(tx - zone.x, tz - zone.z) <= zone.radius)) continue;
           const sc = minScale + rand() * (maxScale - minScale);
           const ty = getTerrainHeight(tx, tz) - 0.08;
           placements.push({ x: tx, y: ty, z: tz, rotY: rand() * Math.PI * 2, sc });
@@ -1029,21 +1056,34 @@ export class EidrathEngine {
         if (placements.length === 0) return;
 
         const dummy = new THREE.Object3D();
-        for (const srcMesh of meshes) {
-          srcMesh.updateMatrixWorld(true);
-          const inst = new THREE.InstancedMesh(srcMesh.geometry, srcMesh.material, placements.length);
-          inst.castShadow = assetId === 'env_frost_pine' || assetId === 'env_boulder';
-          inst.receiveShadow = true;
-          for (let j = 0; j < placements.length; j++) {
-            const p = placements[j];
-            dummy.position.set(p.x, p.y, p.z);
-            dummy.rotation.set(0, p.rotY, 0);
-            dummy.scale.setScalar(p.sc);
-            dummy.updateMatrix();
-            inst.setMatrixAt(j, dummy.matrix);
+        const matrix = new THREE.Matrix4();
+        sample.updateMatrixWorld(true);
+        // Preserve imported node transforms (trunk/branches/mesh pivots), and cull by chunk.
+        const batches = new Map<string, typeof placements>();
+        for (const placement of placements) {
+          const key = getChunkKey(placement.x, placement.z);
+          const batch = batches.get(key) ?? [];
+          batch.push(placement);
+          batches.set(key, batch);
+        }
+        for (const batch of batches.values()) {
+          for (const srcMesh of meshes) {
+            const inst = new THREE.InstancedMesh(srcMesh.geometry, srcMesh.material, batch.length);
+            inst.castShadow = assetId === 'env_frost_pine' || assetId === 'env_boulder';
+            inst.receiveShadow = true;
+            for (let j = 0; j < batch.length; j++) {
+              const p = batch[j];
+              dummy.position.set(p.x, p.y, p.z);
+              dummy.rotation.set(0, p.rotY, 0);
+              dummy.scale.setScalar(p.sc);
+              dummy.updateMatrix();
+              matrix.multiplyMatrices(dummy.matrix, srcMesh.matrixWorld);
+              inst.setMatrixAt(j, matrix);
+            }
+            inst.instanceMatrix.needsUpdate = true;
+            inst.computeBoundingSphere();
+            this.addToChunk(inst, batch[0].x, batch[0].z);
           }
-          inst.instanceMatrix.needsUpdate = true;
-          this.worldGroup.add(inst);
         }
       } catch {
         // Skip optional scatter if asset fails
@@ -1886,6 +1926,13 @@ export class EidrathEngine {
     }
     this.save.player.stamina = Math.max(0, this.save.player.stamina - res.staminaCost);
     this.staminaRegenDelaySec = 0.7;
+    const b = this.settings.bindings;
+    const x = this.touchMoveX + Number(this.keys.has(b.right) || this.keys.has('ArrowRight')) - Number(this.keys.has(b.left) || this.keys.has('ArrowLeft'));
+    const z = this.touchMoveY + Number(this.keys.has(b.forward) || this.keys.has('ArrowUp')) - Number(this.keys.has(b.backward) || this.keys.has('ArrowDown'));
+    const length = Math.hypot(x, z);
+    this.dodgeX = length > 0.1 ? (-Math.sin(this.camYaw) * z + Math.cos(this.camYaw) * x) / length : Math.sin(this.save.player.yaw);
+    this.dodgeZ = length > 0.1 ? (-Math.cos(this.camYaw) * z - Math.sin(this.camYaw) * x) / length : Math.cos(this.save.player.yaw);
+    this.save.player.yaw = Math.atan2(this.dodgeX, this.dodgeZ);
     this.combatVfx.clearWeaponTrail();
     this.setKaelenClip('Dodge', false, 1, true);
     this.audio.playFootstep(true, getSurfaceKindAt(this.save.player.x, this.save.player.z));
@@ -2064,7 +2111,7 @@ export class EidrathEngine {
 
     const rawDt = Math.max(0.001, (ts - this.lastFrameTs) / 1000);
     this.lastFrameTs = ts;
-    const dt = Math.min(0.05, rawDt); // Clamp pathological deltas
+    const dt = Math.min(0.10, rawDt); // Limit catch-up after a tab suspension, not ordinary 20 FPS.
     this.elapsedSec += dt;
 
     this.fpsAccum += rawDt;
@@ -2078,6 +2125,12 @@ export class EidrathEngine {
     this.updateSnow(dt);
 
     if (this.mode === 'title') {
+      if (this.authoredTitleCamera) {
+        this.camera.position.copy(this.authoredTitleCamera.position);
+        this.camera.lookAt(this.authoredTitleCamera.target);
+        this.realisticRenderer.render();
+        return;
+      }
       const t = ts * 0.00018;
       const orbitR = this.settings.reducedMotion ? 8.8 : 9.2;
       this.camera.position.set(
@@ -2092,10 +2145,15 @@ export class EidrathEngine {
 
     if (this.mode === 'playing' || this.mode === 'dialogue') {
       if (this.mode === 'playing') {
-        if (this.hitstopSec > 0) {
-          this.hitstopSec = Math.max(0, this.hitstopSec - dt);
-        } else {
-          this.stepSimulation(dt);
+        for (const step of motionSubsteps(dt)) {
+          if (this.mode !== 'playing') break;
+          if (this.hitstopSec > 0) {
+            const frozen = Math.min(step, this.hitstopSec);
+            this.hitstopSec -= frozen;
+            if (step > frozen) this.stepSimulation(step - frozen);
+          } else {
+            this.stepSimulation(step);
+          }
         }
       }
       this.updateCamera(dt);
@@ -2178,6 +2236,15 @@ export class EidrathEngine {
       else if (buffered === 'dodge') this.tryPlayerDodge();
     }
 
+    // Update player transform and skeletal pose before sampling the weapon socket.
+    this.updatePlayerMovement(dt);
+    const pendingAction = this.timeline.activeAction;
+    if (pendingAction) {
+      const attack = pendingAction.attack;
+      this.kaelenCtrl?.syncAttackPose(pendingAction.elapsedMs, attack.windupMs, attack.activeMs, attack.recoveryMs);
+    }
+    this.kaelenCtrl?.update(dt);
+    if (!this.kaelenCtrl) this.kaelen?.mixer?.update(dt);
     if (this.timeline.state === 'active' && this.timeline.activeAction) {
       const release = consumeAttackRelease(this.timeline);
       if (release) this.releasePlayerAttack(release);
@@ -2211,9 +2278,6 @@ export class EidrathEngine {
     } else {
       this.outOfCombatSec = 0;
     }
-
-    // Player locomotion & collision
-    this.updatePlayerMovement(dt);
 
     // Stream / activate nearby chunks (3x3 radius around player)
     const activeChunks = new Set(getActiveChunkKeys(this.save.player.x, this.save.player.z, 1));
@@ -2278,9 +2342,7 @@ export class EidrathEngine {
       }
     }
 
-    // Update mixers & normalized animation events
-    this.kaelenCtrl?.update(dt);
-    if (!this.kaelenCtrl) this.kaelen?.mixer?.update(dt);
+    // Update other actor mixers; the player was already sampled before combat.
     this.lyraCtrl?.update(dt);
     if (!this.lyraCtrl) this.lyra?.mixer?.update(dt);
     for (const npc of this.npcs) {
@@ -2343,16 +2405,16 @@ export class EidrathEngine {
     let desiredVx = 0;
     let desiredVz = 0;
     if (this.timeline.state === 'dodge') {
-      desiredVx = Math.sin(this.save.player.yaw) * baseSpeed;
-      desiredVz = Math.cos(this.save.player.yaw) * baseSpeed;
+      desiredVx = this.dodgeX * baseSpeed;
+      desiredVz = this.dodgeZ * baseSpeed;
     } else if (canMove && mag > 0.05) {
       desiredVx = (fwdX * inZ + rightX * inX) * baseSpeed;
       desiredVz = (fwdZ * inZ + rightZ * inX) * baseSpeed;
     }
 
-    const accel = mag > 0.05 ? 14 : 18;
-    this.playerVelX += (desiredVx - this.playerVelX) * Math.min(1, accel * dt);
-    this.playerVelZ += (desiredVz - this.playerVelZ) * Math.min(1, accel * dt);
+    const accel = mag > 0.05 ? 11 : 16;
+    this.playerVelX = damp(this.playerVelX, desiredVx, accel, dt);
+    this.playerVelZ = damp(this.playerVelZ, desiredVz, accel, dt);
 
     const previousX = this.save.player.x;
     const previousZ = this.save.player.z;
@@ -2400,6 +2462,7 @@ export class EidrathEngine {
     // Character facing: face locked target or movement direction
     // Derive pose speed from actual collision-resolved movement, not desired velocity.
     const speedHoriz = Math.min(Math.hypot(this.playerVelX, this.playerVelZ), Math.hypot(resolvedX - previousX, resolvedZ - previousZ) / Math.max(dt, 0.001));
+    this.actualMoveSpeed = speedHoriz;
     const lockedTarget = this.lockedEnemyId
       ? this.enemies.find((e) => e.id === this.lockedEnemyId && e.aiState !== 'dead')
       : null;
@@ -2407,7 +2470,7 @@ export class EidrathEngine {
     if (lockedTarget && this.timeline.state !== 'dodge') {
       const targetYaw = Math.atan2(lockedTarget.x - this.save.player.x, lockedTarget.z - this.save.player.z);
       this.save.player.yaw = this.lerpAngle(this.save.player.yaw, targetYaw, Math.min(1, 14 * dt));
-    } else if (speedHoriz > 0.35 && this.timeline.state !== 'dodge') {
+    } else if (speedHoriz > 0.35 && this.timeline.state !== 'dodge' && !this.timeline.activeAction) {
       const moveYaw = Math.atan2(this.playerVelX, this.playerVelZ);
       this.save.player.yaw = this.lerpAngle(this.save.player.yaw, moveYaw, Math.min(1, 12 * dt));
     }
@@ -2418,10 +2481,12 @@ export class EidrathEngine {
     }
 
     // Speed-synced locomotion animation (prevents foot sliding & supports crouch/strafe/sprint/jump/fall)
-    if (!this.playerGrounded) {
+    const locomotionAllowed = this.timeline.state === 'idle' || this.timeline.state === 'locomotion';
+    if (!this.playerGrounded && locomotionAllowed) {
       this.setKaelenClip(this.playerVelY > 1.2 ? 'Jump' : 'Fall', true);
-    } else if (this.timeline.state === 'idle' || this.timeline.state === 'locomotion') {
-      if (speedHoriz > 0.35 && !this.walkToggled) {
+    } else if (locomotionAllowed) {
+      this.gait = selectGait(this.gait, speedHoriz, this.walkToggled);
+      if (this.gait !== 'Idle' && !this.walkToggled) {
         this.timeline.state = 'locomotion';
         if (this.isSneaking) {
           this.setKaelenClip('CrouchWalk', true, Math.max(0.75, speedHoriz / 3.1));
@@ -2429,14 +2494,14 @@ export class EidrathEngine {
           this.setKaelenClip(inX < 0 ? 'StrafeLeft' : 'StrafeRight', true, Math.max(0.8, speedHoriz / 4.2));
         } else if (lockedTarget && inZ < -0.25) {
           this.setKaelenClip('WalkBack', true, Math.max(0.8, speedHoriz / 4.0));
-        } else if (speedHoriz > 6.4) {
+        } else if (this.gait === 'Sprint') {
           this.setKaelenClip('Sprint', true, Math.max(0.9, speedHoriz / 7.8));
-        } else if (speedHoriz > 4.6) {
+        } else if (this.gait === 'Run') {
           this.setKaelenClip('Run', true, Math.max(0.85, speedHoriz / 5.4));
         } else {
           this.setKaelenClip('Walk', true, Math.max(0.75, speedHoriz / 3.0));
         }
-      } else if (speedHoriz > 0.25 && this.walkToggled) {
+      } else if (this.gait !== 'Idle' && this.walkToggled) {
         this.timeline.state = 'locomotion';
         this.setKaelenClip('Walk', true, Math.max(0.7, speedHoriz / 2.8));
       } else {
@@ -3335,7 +3400,7 @@ export class EidrathEngine {
     if (e.repeat) return;
     if (e.code === b.interact) this.interact();
     else if (e.code === b.dodge) this.tryPlayerDodge();
-    else if (e.code === b.jump && this.playerGrounded) {
+    else if (e.code === b.jump && this.playerGrounded && (this.timeline.state === 'idle' || this.timeline.state === 'locomotion')) {
       this.playerVelY = 7.4;
       this.playerGrounded = false;
     } else if (e.code === b.block) this.tryPlayerGuard();
