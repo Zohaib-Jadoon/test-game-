@@ -292,7 +292,7 @@ export function App() {
       )}
 
       {/* Developer-Only Blender Asset Forge Drawer */}
-      {devBlenderOpen && (
+      {devBlenderOpen && settings.developerMode && (
         <BlenderDevDrawer
           onClose={() => setDevBlenderOpen(false)}
           onPreviewGlb={async (id, buf, cat) => {

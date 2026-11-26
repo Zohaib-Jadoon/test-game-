@@ -46,10 +46,26 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          cacheId: 'eidrath-v1',
+          cacheId: 'eidrath-v2',
           cleanupOutdatedCaches: true,
-          globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,glb,gltf,woff,woff2}'],
-          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+          runtimeCaching: [
+            {
+              urlPattern: /\/assets\/eidrath\/.*\.(glb|gltf|hdr|jpg|jpeg|png|mp3|json)$/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'eidrath-runtime-assets',
+                expiration: {
+                  maxEntries: 220,
+                  maxAgeSeconds: 60 * 60 * 24 * 30,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+          ],
         },
         devOptions: {
           enabled: false,

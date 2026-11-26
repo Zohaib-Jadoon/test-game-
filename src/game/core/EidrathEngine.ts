@@ -14,16 +14,26 @@ import {
   registerDevPreviewGlb,
   type InstantiatedActor,
 } from '../assets/manifest';
-import { EidrathAudio } from '../audio/eidrathAudio';
+import { EidrathAudio, type MusicZone } from '../audio/eidrathAudio';
+import { AnimationController } from '../animation/AnimationController';
+import { CinematicCamera } from '../camera/CinematicCamera';
+import { CombatVfx } from '../combat/CombatVfx';
+import { createSoftSnowSpriteTexture, RealisticRenderer } from '../rendering/RealisticRenderer';
 import {
   advanceCombatTimeline,
   canRegisterHitOnTarget,
+  classifyHitDirection,
+  computeChargedAttackMultiplier,
   computeDamageAmount,
   computeStealthAwarenessDelta,
+  consumeBufferedInput,
+  createCombatInputBuffer,
   createCombatTimeline,
   DIFFICULTY_TUNING,
   getMountainWardenDamageTakenMultiplier,
   getMountainWardenPhase,
+  getWeaponMovesetTiming,
+  queueCombatInput,
   releaseGuardAction,
   resolveDefenderHit,
   startAttackAction,
@@ -72,6 +82,7 @@ import {
   createFrostheimTerrainMesh,
   getActiveChunkKeys,
   getChunkKey,
+  getSurfaceKindAt,
   getTerrainHeight,
   getTerrainSlopeDeg,
   isInsidePlayableBounds,
@@ -208,9 +219,12 @@ const RUNE_COLORS = [0x6d9cb6, 0x9c7848, 0xd9d1be] as const;
 export class EidrathEngine {
   private container: HTMLElement;
   private callbacks: EidrathEngineCallbacks;
-  private renderer: THREE.WebGLRenderer;
+  private realisticRenderer!: RealisticRenderer;
+  private renderer!: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
+  private cinematicCamera!: CinematicCamera;
+  private combatVfx!: CombatVfx;
   private audio = new EidrathAudio();
 
   private mode: HudSnapshot['mode'] = 'title';
@@ -220,6 +234,7 @@ export class EidrathEngine {
   private rafId: number | null = null;
   private disposed = false;
   private lastFrameTs = 0;
+  private elapsedSec = 0;
   private hudThrottleAccum = 0;
   private fpsAccum = 0;
   private fpsFrames = 0;
@@ -230,15 +245,24 @@ export class EidrathEngine {
   private titleGroup = new THREE.Group();
   private worldGroup = new THREE.Group();
   private chunkGroups = new Map<string, THREE.Group>();
+  private collisionMeshes: THREE.Object3D[] = [];
   private snowPoints: THREE.Points | null = null;
+  private waterUpdater: ((elapsedSec: number) => void) | null = null;
   private sunLight!: THREE.DirectionalLight;
   private hemiLight!: THREE.HemisphereLight;
   private playerLight!: THREE.PointLight;
 
   // Player state
   private kaelen: InstantiatedActor | null = null;
+  private kaelenCtrl: AnimationController | null = null;
   private kaelenClip = '';
+  private weaponDrawn = true;
+  private outOfCombatSec = 0;
+  private walkToggled = false;
   private lyra: InstantiatedActor | null = null;
+  private lyraCtrl: AnimationController | null = null;
+  private npcCtrls = new Map<string, AnimationController>();
+  private enemyCtrls = new Map<string, AnimationController>();
   private lyraPos = new THREE.Vector3(-120, 0, 122);
   private lyraYaw = 0;
   private lyraClip = '';
@@ -250,19 +274,22 @@ export class EidrathEngine {
   private playerVelZ = 0;
   private playerGrounded = true;
   private isSneaking = false;
-  private footstepAccum = 0;
   private staminaRegenDelaySec = 0;
   private comboStep = 0;
   private comboResetSec = 0;
   private ascensionSec = 0;
   private abilityCooldowns: [number, number, number, number] = [0, 0, 0, 0];
   private timeline: CombatActorTimeline = createCombatTimeline();
+  private inputBuffer = createCombatInputBuffer();
+  private chargingHeavy = false;
+  private chargeStartTs = 0;
+  private bossIntroPlayed = false;
+  private hitReactions = new Map<string, { pitch: number; roll: number; timer: number }>();
+  private currentMusicZone: MusicZone = 'menu';
 
   // Camera
   private camYaw = -Math.PI * 0.25;
   private camPitch = 0.28;
-  private camShakeSec = 0;
-  private camShakeAmp = 0;
   private lockedEnemyId: string | null = null;
   private pointerLocked = false;
   private rightMouseDrag = false;
@@ -282,7 +309,6 @@ export class EidrathEngine {
   private projectiles: ProjectileRuntime[] = [];
   private fissures: FissureHazard[] = [];
   private sealStones: SealStoneRuntime[] = [];
-  private vfxList: SlashVfx[] = [];
   private runeStates: [number, number, number] = [1, 2, 0]; // Target solution: [0, 1, 2]
   private runeVisuals: THREE.PointLight[] = [];
   private keepGateBarrierMesh: THREE.Mesh | null = null;
@@ -309,32 +335,37 @@ export class EidrathEngine {
     }
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#27333e');
-    this.scene.fog = new THREE.FogExp2('#2e3c48', 0.0068);
 
     const w = Math.max(320, container.clientWidth || window.innerWidth);
     const h = Math.max(240, container.clientHeight || window.innerHeight);
-    this.camera = new THREE.PerspectiveCamera(58, w / h, 0.2, 420);
-
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: this.settings.quality !== 'low',
-      powerPreference: 'high-performance',
-    });
-    this.renderer.setSize(w, h);
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.28;
-    this.renderer.shadowMap.enabled = this.settings.quality !== 'low';
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.applyQualityPreset(this.settings.quality);
+    this.camera = new THREE.PerspectiveCamera(this.settings.fov || 56, w / h, 0.2, 460);
 
     container.innerHTML = '';
-    container.appendChild(this.renderer.domElement);
+    this.realisticRenderer = new RealisticRenderer(container, this.scene, this.camera, this.settings.quality);
+    this.renderer = this.realisticRenderer.renderer;
+    this.sunLight = this.realisticRenderer.sunLight;
+    this.hemiLight = this.realisticRenderer.hemiLight;
+
+    this.cinematicCamera = new CinematicCamera({
+      baseFov: this.settings.fov || 56,
+      baseDistance: this.settings.cameraDistance || 3.4,
+      cameraShakeEnabled: this.settings.cameraShake,
+      reducedMotion: this.settings.reducedMotion,
+    });
+    this.combatVfx = new CombatVfx(this.worldGroup);
 
     this.setupLighting();
     this.setupSnowParticles();
     this.scene.add(this.titleGroup);
     this.scene.add(this.worldGroup);
     this.worldGroup.visible = false;
+
+    this.audio.setSettings(this.settings.masterVolume, this.settings.muted, {
+      musicVolume: this.settings.musicVolume,
+      ambienceVolume: this.settings.ambienceVolume,
+      sfxVolume: this.settings.sfxVolume,
+      dialogueVolume: this.settings.dialogueVolume,
+    });
 
     void this.buildTitleBackdrop();
     this.bindInputEvents();
@@ -344,30 +375,12 @@ export class EidrathEngine {
   }
 
   private setupLighting(): void {
-    this.hemiLight = new THREE.HemisphereLight(0xd2e4f5, 0x4b5661, 1.38);
-    this.scene.add(this.hemiLight);
-
-    this.sunLight = new THREE.DirectionalLight(0xfff6ea, 1.85);
-    this.sunLight.position.set(62, 92, 68);
-    this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(1024, 1024);
-    this.sunLight.shadow.camera.near = 10;
-    this.sunLight.shadow.camera.far = 220;
-    const d = 55;
-    this.sunLight.shadow.camera.left = -d;
-    this.sunLight.shadow.camera.right = d;
-    this.sunLight.shadow.camera.top = d;
-    this.sunLight.shadow.camera.bottom = -d;
-    this.sunLight.shadow.bias = -0.0005;
-    this.scene.add(this.sunLight);
-    this.scene.add(this.sunLight.target);
-
-    this.playerLight = new THREE.PointLight(0x88b8d4, 1.35, 16);
+    this.playerLight = new THREE.PointLight(0x88b8d4, 0.9, 14);
     this.scene.add(this.playerLight);
   }
 
   private setupSnowParticles(): void {
-    const count = 900;
+    const count = 440;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       positions[i * 3] = (Math.random() - 0.5) * 90;
@@ -377,11 +390,13 @@ export class EidrathEngine {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const mat = new THREE.PointsMaterial({
-      color: 0xd9e4ee,
-      size: 0.16,
+      color: 0xe6eff8,
+      map: createSoftSnowSpriteTexture(),
+      size: 0.42,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.56,
       depthWrite: false,
+      blending: THREE.NormalBlending,
     });
     this.snowPoints = new THREE.Points(geo, mat);
     this.snowPoints.frustumCulled = false;
@@ -406,12 +421,10 @@ export class EidrathEngine {
       this.titleGroup.add(shrine);
 
       const pineOffsets: Array<[number, number, number]> = [
-        [-6.5, -4.5, 1.1],
-        [7.2, -5.2, 1.0],
-        [-9.0, 2.5, 1.2],
-        [8.5, 3.0, 0.95],
-        [-3.2, -8.8, 1.3],
-        [4.0, -9.2, 1.15],
+        [-6.2, -4.6, 1.1],
+        [6.4, -4.8, 1.0],
+        [-7.2, 3.8, 1.15],
+        [6.8, 4.2, 0.95],
       ];
       for (const [px, pz, sc] of pineOffsets) {
         const pine = await instantiateStaticAsset('env_frost_pine', sc);
@@ -443,24 +456,26 @@ export class EidrathEngine {
   }
 
   public applyQualityPreset(preset: GameSettings['quality']): void {
-    const dprCap = preset === 'low' ? 1.0 : preset === 'medium' ? 1.35 : Math.min(2, window.devicePixelRatio || 1);
-    this.renderer.setPixelRatio(dprCap);
-    this.renderer.shadowMap.enabled = preset !== 'low';
-    if (this.sunLight) {
-      this.sunLight.castShadow = preset !== 'low';
-      const sz = preset === 'high' ? 2048 : 1024;
-      if (this.sunLight.shadow.mapSize.x !== sz) {
-        this.sunLight.shadow.mapSize.set(sz, sz);
-        this.sunLight.shadow.map?.dispose();
-        this.sunLight.shadow.map = null;
-      }
-    }
+    const w = this.container?.clientWidth || window.innerWidth;
+    const h = this.container?.clientHeight || window.innerHeight;
+    this.realisticRenderer.applyPreset(preset, w, h);
   }
 
   public setSettings(next: GameSettings): void {
     this.settings = next;
     this.applyQualityPreset(next.quality);
-    this.audio.setSettings(next.masterVolume, next.muted);
+    this.cinematicCamera.updateConfig({
+      baseFov: next.fov || 56,
+      baseDistance: next.cameraDistance || 3.4,
+      cameraShakeEnabled: next.cameraShake,
+      reducedMotion: next.reducedMotion,
+    });
+    this.audio.setSettings(next.masterVolume, next.muted, {
+      musicVolume: next.musicVolume,
+      ambienceVolume: next.ambienceVolume,
+      sfxVolume: next.sfxVolume,
+      dialogueVolume: next.dialogueVolume,
+    });
   }
 
   public getSaveSnapshot(): SaveGame {
@@ -472,6 +487,8 @@ export class EidrathEngine {
     const fresh = createNewGameSave(slotId);
     fresh.player.y = getTerrainHeight(fresh.player.x, fresh.player.z);
     await this.loadSave(fresh);
+    this.cinematicCamera.startTombOpening(this.save.player.yaw);
+    this.camYaw = this.cinematicCamera.yaw;
     this.showBanner('Oathgrave Tomb — Frostheim');
     this.showSubtitle('Centuries after the betrayal, Kaelen wakes beneath the snow. Claim your blade from the altar.');
   }
@@ -481,8 +498,9 @@ export class EidrathEngine {
     this.save = JSON.parse(JSON.stringify(save)) as SaveGame;
     syncPlayerCaps(this.save);
     this.save.player.y = getTerrainHeight(this.save.player.x, this.save.player.z);
-    // Position over-the-shoulder camera BEHIND Kaelen so Kaelen faces forward into the scene
     this.camYaw = this.save.player.yaw + Math.PI;
+    this.cinematicCamera.yaw = this.camYaw;
+    this.cinematicCamera.setDialogueShot(null);
     this.timeline = createCombatTimeline();
     this.ascensionSec = 0;
     this.lockedEnemyId = null;
@@ -500,6 +518,7 @@ export class EidrathEngine {
     this.titleGroup.visible = false;
     this.worldGroup.visible = true;
     this.mode = 'playing';
+    this.audio.setMusicState('explore');
     this.callbacks.onSaveChanged(this.getSaveSnapshot());
     this.emitHudSnapshot();
   }
@@ -574,6 +593,9 @@ export class EidrathEngine {
     group.position.set(x, y, z);
     group.rotation.y = rotY;
     this.addToChunk(group, x, z);
+    if (assetId.startsWith('env_')) {
+      this.collisionMeshes.push(group);
+    }
     if (colliderRadius > 0) {
       this.colliders.push({
         id: colliderId ?? `${assetId}_${Math.round(x)}_${Math.round(z)}`,
@@ -587,27 +609,60 @@ export class EidrathEngine {
   }
 
   private async buildFrostheimWorld(): Promise<void> {
-    // 1. Continuous snowy Frostheim terrain + Frozen Reach lake
-    const { terrain, frozenLake } = createFrostheimTerrainMesh(140);
+    // 1. Continuous snowy Frostheim terrain + Frozen Reach lake + Alpine silhouettes
+    const { terrain, frozenLake, horizons, updateWater } = createFrostheimTerrainMesh(180);
+    this.waterUpdater = updateWater;
     this.worldGroup.add(terrain);
     this.worldGroup.add(frozenLake);
+    this.worldGroup.add(horizons);
+    this.collisionMeshes.push(terrain);
 
-    // 2. Load hero Kaelen + companion Lyra
+    // 2. Load hero Kaelen + companion Lyra + AnimationControllers
     this.kaelen = await instantiateSkinnedActor('chr_kaelen');
     this.worldGroup.add(this.kaelen.root);
-    this.playActorClip(this.kaelen, 'Idle', true);
+    this.kaelenCtrl = new AnimationController(this.kaelen.mixer, this.kaelen.clips, {
+      onEvent: (ev) => {
+        if (ev === 'foot_left' || ev === 'foot_right') {
+          const surface = getSurfaceKindAt(this.save.player.x, this.save.player.z);
+          const sprinting = Math.hypot(this.playerVelX, this.playerVelZ) > 6.2;
+          this.audio.playFootstep(sprinting, surface);
+          if (surface === 'snow' && sprinting) {
+            this.combatVfx.spawnSnowDust(new THREE.Vector3(this.save.player.x, this.save.player.y, this.save.player.z), 3);
+          }
+        } else if (ev === 'weapon_draw') {
+          this.weaponDrawn = true;
+          this.audio.playUnsheathe();
+          void this.refreshPlayerWeapons();
+        } else if (ev === 'weapon_sheathe') {
+          this.weaponDrawn = false;
+          this.audio.playUnsheathe();
+          void this.refreshPlayerWeapons();
+        } else if (ev === 'hitbox_end') {
+          this.combatVfx.clearWeaponTrail();
+        }
+      },
+    });
+    this.kaelenCtrl.play('Idle', { loop: true });
     this.kaelenClip = 'Idle';
 
     this.lyra = await instantiateSkinnedActor('chr_lyra');
     this.lyraPos.set(-120, getTerrainHeight(-120, 122), 122);
     this.lyra.root.position.copy(this.lyraPos);
     this.worldGroup.add(this.lyra.root);
-    this.playActorClip(this.lyra, 'Idle', true);
+    this.lyraCtrl = new AnimationController(this.lyra.mixer, this.lyra.clips);
+    this.lyraCtrl.play('Idle', { loop: true });
     this.lyraClip = 'Idle';
 
+    // Spatial 3D audio emitters across Frostheim
+    this.audio.registerSpatialEmitter('wind_highland', 'env/wind', { x: -40, y: 12, z: 20 });
+    this.audio.registerSpatialEmitter('fire_tomb', 'env/fire', { x: -141, y: getTerrainHeight(-141, 142) + 1, z: 142 });
+    this.audio.registerSpatialEmitter('fire_village', 'env/fire', { x: -10, y: getTerrainHeight(-10, 36) + 1, z: 36 });
+    this.audio.registerSpatialEmitter('fire_forge', 'env/fire', { x: -24, y: getTerrainHeight(-24, 38) + 1, z: 38 });
+    this.audio.registerSpatialEmitter('water_frozen_reach', 'env/water', { x: 96, y: 0, z: -58 });
+
     // 3. Handcrafted Frostheim Landmarks (all 10 modular Blender buildings + 25 props)
-    // 3a. Oathgrave Tomb (-145, 145)
-    await this.placeWorldPiece('env_oathgrave_tomb', -149, 149, -Math.PI * 0.25, 1.35, 3.2);
+    // 3a. Oathgrave Tomb (-145, 145) — oriented so open archway faces NE (+X, -Z) toward Altar & Ravenhold
+    await this.placeWorldPiece('env_oathgrave_tomb', -149, 149, Math.PI * 0.75, 1.35, 3.2);
     await this.placeWorldPiece('prop_brazier', -141, 142, 0, 1.0, 0.6);
     await this.placeWorldPiece('prop_cairn', -131, 131, 0.5, 1.0, 0.7);
     const altar = await this.placeWorldPiece('prop_altar_pedestal', -138, 138, -Math.PI * 0.25, 1.0, 0.75);
@@ -812,8 +867,8 @@ export class EidrathEngine {
       ],
     });
 
-    // 3h. Warden's Keep Dungeon & Boss Courtyard (6, -116 to 6, -146)
-    await this.placeWorldPiece('env_keep_gate', 6, -122, 0, 1.65, 0);
+    // 3h. Warden's Keep Dungeon & Boss Courtyard (6, -116 to 6, -150)
+    await this.placeWorldPiece('env_keep_gate', 6, -118, 0, 1.45, 0);
     await this.placeWorldPiece('prop_stair_block', 6, -110, 0, 1.5, 0);
     await this.placeWorldPiece('prop_brazier', -1, -118, 0, 1.2, 0.6);
     await this.placeWorldPiece('prop_brazier', 13, -118, 0, 1.2, 0.6);
@@ -907,7 +962,7 @@ export class EidrathEngine {
       enabled: false,
     });
 
-    // 4. Populate Frostheim pine forest & perimeter cliffs (seeded deterministic layout)
+    // 4. Populate dense Frostheim wilderness via InstancedMesh (320 pines + boulders + stumps + ferns)
     let seed = 4291;
     const rand = () => {
       seed = (seed * 16807) % 2147483647;
@@ -916,20 +971,77 @@ export class EidrathEngine {
     const isClearForTree = (tx: number, tz: number) => {
       if (Math.hypot(tx, tz) > 205) return false;
       for (const lm of FROSTHEIM_LANDMARKS) {
-        if (Math.hypot(tx - lm.x, tz - lm.z) < lm.discoverRadius + 5) return false;
+        if (Math.hypot(tx - lm.x, tz - lm.z) < lm.discoverRadius + 6) return false;
       }
-      if (Math.hypot(tx - 96, tz + 58) < 34) return false; // Frozen lake
-      if (Math.hypot(tx - 6, tz + 146) < 34) return false; // Boss courtyard
-      return getTerrainSlopeDeg(tx, tz) < 32;
+      if (Math.hypot(tx - 96, tz + 58) < 35) return false; // Frozen lake
+      if (Math.hypot(tx - 6, tz + 146) < 35) return false; // Boss courtyard
+      return getTerrainSlopeDeg(tx, tz) < 30;
     };
 
-    for (let i = 0; i < 68; i++) {
-      const tx = (rand() - 0.5) * 370;
-      const tz = (rand() - 0.5) * 370;
-      if (!isClearForTree(tx, tz)) continue;
-      const sc = 0.85 + rand() * 0.55;
-      await this.placeWorldPiece('env_frost_pine', tx, tz, rand() * Math.PI * 2, sc, 0.75 * sc);
-    }
+    const scatterAssetInstanced = async (
+      assetId: string,
+      maxAttempts: number,
+      minScale: number,
+      maxScale: number,
+      colliderScale: number,
+    ) => {
+      try {
+        const sample = await instantiateStaticAsset(assetId, 1.0);
+        const meshes: THREE.Mesh[] = [];
+        sample.traverse((obj) => {
+          const m = obj as THREE.Mesh;
+          if (m.isMesh && !m.name.startsWith('UCX_') && m.geometry) {
+            meshes.push(m);
+          }
+        });
+        if (meshes.length === 0) return;
+
+        const placements: Array<{ x: number; y: number; z: number; rotY: number; sc: number }> = [];
+        for (let i = 0; i < maxAttempts; i++) {
+          const tx = (rand() - 0.5) * 390;
+          const tz = (rand() - 0.5) * 390;
+          if (!isClearForTree(tx, tz)) continue;
+          const sc = minScale + rand() * (maxScale - minScale);
+          const ty = getTerrainHeight(tx, tz) - 0.08;
+          placements.push({ x: tx, y: ty, z: tz, rotY: rand() * Math.PI * 2, sc });
+          if (colliderScale > 0) {
+            this.colliders.push({
+              id: `${assetId}_${i}`,
+              x: tx,
+              z: tz,
+              radius: colliderScale * sc,
+              active: true,
+            });
+          }
+        }
+        if (placements.length === 0) return;
+
+        const dummy = new THREE.Object3D();
+        for (const srcMesh of meshes) {
+          srcMesh.updateMatrixWorld(true);
+          const inst = new THREE.InstancedMesh(srcMesh.geometry, srcMesh.material, placements.length);
+          inst.castShadow = assetId === 'env_frost_pine' || assetId === 'env_boulder';
+          inst.receiveShadow = true;
+          for (let j = 0; j < placements.length; j++) {
+            const p = placements[j];
+            dummy.position.set(p.x, p.y, p.z);
+            dummy.rotation.set(0, p.rotY, 0);
+            dummy.scale.setScalar(p.sc);
+            dummy.updateMatrix();
+            inst.setMatrixAt(j, dummy.matrix);
+          }
+          inst.instanceMatrix.needsUpdate = true;
+          this.worldGroup.add(inst);
+        }
+      } catch {
+        // Skip optional scatter if asset fails
+      }
+    };
+
+    await scatterAssetInstanced('env_frost_pine', 360, 0.78, 1.48, 0.65);
+    await scatterAssetInstanced('env_boulder', 130, 0.55, 1.45, 0.95);
+    await scatterAssetInstanced('env_tree_stump', 90, 0.85, 1.35, 0.45);
+    await scatterAssetInstanced('env_fern', 140, 0.75, 1.35, 0);
 
     for (let i = 0; i < 18; i++) {
       const ang = (i / 18) * Math.PI * 2;
@@ -957,7 +1069,9 @@ export class EidrathEngine {
       const y = getTerrainHeight(cfg.x, cfg.z);
       actor.root.position.set(cfg.x, y, cfg.z);
       actor.root.rotation.y = cfg.yaw;
-      this.playActorClip(actor, 'Idle', true);
+      const ctrl = new AnimationController(actor.mixer, actor.clips);
+      ctrl.play('Idle', { loop: true });
+      this.npcCtrls.set(cfg.id, ctrl);
       this.addToChunk(actor.root, cfg.x, cfg.z);
       this.npcs.push({
         id: cfg.id,
@@ -1040,7 +1154,9 @@ export class EidrathEngine {
     const actor = await instantiateSkinnedActor(def.assetId);
     const y = getTerrainHeight(x, z);
     actor.root.position.set(x, y, z);
-    this.playActorClip(actor, 'Idle', true);
+    const ctrl = new AnimationController(actor.mixer, actor.clips);
+    ctrl.play('Idle', { loop: true });
+    this.enemyCtrls.set(id, ctrl);
     this.worldGroup.add(actor.root);
 
     const enemy: EnemyRuntime = {
@@ -1158,7 +1274,13 @@ export class EidrathEngine {
     if (!this.kaelen) return;
     const mainItem = this.save.player.equipment.mainHand ? ITEMS[this.save.player.equipment.mainHand] : null;
     const offItem = this.save.player.equipment.offHand ? ITEMS[this.save.player.equipment.offHand] : null;
-    await attachWeaponToSocket(this.kaelen, mainItem?.meshAssetId ?? null, 'hand_r');
+    if (this.weaponDrawn) {
+      await attachWeaponToSocket(this.kaelen, null, 'back_weapon');
+      await attachWeaponToSocket(this.kaelen, mainItem?.meshAssetId ?? null, 'hand_r');
+    } else {
+      await attachWeaponToSocket(this.kaelen, null, 'hand_r');
+      await attachWeaponToSocket(this.kaelen, mainItem?.meshAssetId ?? null, 'back_weapon');
+    }
     await attachWeaponToSocket(this.kaelen, offItem?.meshAssetId ?? null, 'hand_l');
   }
 
@@ -1170,18 +1292,27 @@ export class EidrathEngine {
     const action = actor.mixer.clipAction(clip);
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     action.clampWhenFinished = !loop;
-    action.reset().fadeIn(0.1).play();
+    action.reset().fadeIn(0.16).play();
   }
 
-  private setKaelenClip(name: string, loop = true): void {
+  private setKaelenClip(name: string, loop = true, timeScale = 1.0): void {
+    if (this.kaelenCtrl) {
+      this.kaelenClip = name;
+      this.kaelenCtrl.play(name, { loop, fadeSec: 0.14, timeScale });
+      return;
+    }
     if (this.kaelenClip === name) return;
     this.kaelenClip = name;
     this.playActorClip(this.kaelen, name, loop);
   }
 
-  private setEnemyClip(enemy: EnemyRuntime, name: string, loop = true): void {
-    if (enemy.currentClip === name) return;
+  private setEnemyClip(enemy: EnemyRuntime, name: string, loop = true, timeScale = 1.0): void {
     enemy.currentClip = name;
+    const ctrl = this.enemyCtrls.get(enemy.id);
+    if (ctrl) {
+      ctrl.play(name, { loop, fadeSec: 0.14, timeScale });
+      return;
+    }
     this.playActorClip(enemy.actor, name, loop);
   }
 
@@ -1341,6 +1472,26 @@ export class EidrathEngine {
     this.keys.clear();
     this.activeDialogueNodeId = nodeId;
     this.mode = 'dialogue';
+    // Activate cinematic two-shot dialogue camera toward nearest NPC or Lyra
+    let npcPos: THREE.Vector3 | null = null;
+    if (nodeId === 'dlg_lyra_intro' && this.lyra) {
+      npcPos = this.lyraPos.clone();
+    } else {
+      let bestD = Infinity;
+      for (const npc of this.npcs) {
+        const d = Math.hypot(npc.homeX - this.save.player.x, npc.homeZ - this.save.player.z);
+        if (d < bestD && d < 8) {
+          bestD = d;
+          npcPos = new THREE.Vector3(npc.homeX, getTerrainHeight(npc.homeX, npc.homeZ), npc.homeZ);
+        }
+      }
+    }
+    if (npcPos) {
+      this.cinematicCamera.setDialogueShot({
+        npcPos,
+        playerPos: new THREE.Vector3(this.save.player.x, this.save.player.y, this.save.player.z),
+      });
+    }
     this.callbacks.onDialogueOpen(nodeId);
     this.emitHudSnapshot();
   }
@@ -1366,6 +1517,7 @@ export class EidrathEngine {
       this.callbacks.onDialogueOpen(res.nextNodeId);
     } else {
       this.activeDialogueNodeId = null;
+      this.cinematicCamera.setDialogueShot(null);
       this.callbacks.onDialogueOpen(null);
       if (res.openUi) {
         this.mode = 'menu';
@@ -1379,6 +1531,7 @@ export class EidrathEngine {
 
   public closeDialogue(): void {
     this.activeDialogueNodeId = null;
+    this.cinematicCamera.setDialogueShot(null);
     this.callbacks.onDialogueOpen(null);
     if (this.mode === 'dialogue') {
       this.mode = 'playing';
@@ -1588,8 +1741,10 @@ export class EidrathEngine {
 
   public addTouchLook(dx: number, dy: number): void {
     const sens = 0.0045 * this.settings.mouseSensitivity;
-    this.camYaw -= dx * sens;
-    this.camPitch = Math.max(-0.2, Math.min(0.85, this.camPitch + dy * sens));
+    this.cinematicCamera.yaw -= dx * sens;
+    this.cinematicCamera.pitch = Math.max(-0.2, Math.min(0.85, this.cinematicCamera.pitch + dy * sens));
+    this.camYaw = this.cinematicCamera.yaw;
+    this.camPitch = this.cinematicCamera.pitch;
   }
 
   public triggerTouchAction(action: 'light' | 'heavy' | 'dodge' | 'block' | 'release_block' | 'interact' | 'lock' | 'ability1' | 'ability2' | 'ability3' | 'potion' | 'ascension'): void {
@@ -1611,9 +1766,30 @@ export class EidrathEngine {
   // ---------------------------------------------------------------------------
   // Combat Triggers
   // ---------------------------------------------------------------------------
+  private ensureWeaponDrawn(): void {
+    this.outOfCombatSec = 0;
+    if (!this.weaponDrawn) {
+      this.weaponDrawn = true;
+      this.audio.playUnsheathe();
+      void this.refreshPlayerWeapons();
+    }
+  }
+
   private tryPlayerLightAttack(): void {
     if (this.mode !== 'playing') return;
-    const mainItem = this.save.player.equipment.mainHand ? ITEMS[this.save.player.equipment.mainHand] : null;
+    if (
+      this.timeline.state === 'windup' ||
+      this.timeline.state === 'active' ||
+      this.timeline.state === 'recovery'
+    ) {
+      queueCombatInput(this.inputBuffer, 'light_attack', performance.now());
+      return;
+    }
+
+    this.ensureWeaponDrawn();
+    const mainId = this.save.player.equipment.mainHand ?? '';
+    const mainItem = mainId ? ITEMS[mainId] : null;
+    const timing = getWeaponMovesetTiming(mainId);
     const attackId =
       mainItem?.moveset === 'bow'
         ? 'bow_shot'
@@ -1625,45 +1801,83 @@ export class EidrathEngine {
 
     const res = startAttackAction(this.timeline, attackId, this.save.player.stamina, this.save.player.mana);
     if (!res.started || !res.attack) return;
-    this.save.player.stamina = Math.max(0, this.save.player.stamina - res.staminaCost);
+    if (this.timeline.activeAction) {
+      this.timeline.activeAction.attack = {
+        ...res.attack,
+        windupMs: Math.round(res.attack.windupMs * timing.windupMult),
+        activeMs: Math.round(res.attack.activeMs * timing.activeMult),
+        recoveryMs: Math.round(res.attack.recoveryMs * timing.recoveryMult),
+        poiseDamage: Math.round(res.attack.poiseDamage * timing.poiseMult),
+      };
+    }
+
+    this.save.player.stamina = Math.max(0, this.save.player.stamina - Math.round(res.staminaCost * timing.staminaMult));
     this.staminaRegenDelaySec = 0.7;
     this.comboStep = (this.comboStep + 1) % 3;
-    this.comboResetSec = 1.15;
+    this.comboResetSec = 1.25;
     this.faceLockOrCamera();
-    this.setKaelenClip(res.attack.animation, false);
-    this.audio.playSlash(false);
+    this.combatVfx.clearWeaponTrail();
+    this.setKaelenClip(res.attack.animation, false, 1 / timing.windupMult);
+    this.audio.playSlash(timing.weightClass === 'heavy');
 
     if (res.attack.hitShape === 'projectile') {
       this.spawnPlayerProjectile(res.attack, 0xd9d1be, 32);
-    } else {
-      this.spawnSlashArc(this.save.player.x, this.save.player.y + 1.25, this.save.player.z, this.save.player.yaw, 0xd9d1be, res.attack.range * 0.75);
     }
   }
 
-  private tryPlayerHeavyAttack(): void {
+  private tryPlayerHeavyAttack(chargeSec = 0): void {
     if (this.mode !== 'playing') return;
+    if (
+      this.timeline.state === 'windup' ||
+      this.timeline.state === 'active' ||
+      this.timeline.state === 'recovery'
+    ) {
+      queueCombatInput(this.inputBuffer, 'heavy_attack', performance.now());
+      return;
+    }
+    this.ensureWeaponDrawn();
+    const timing = getWeaponMovesetTiming(this.save.player.equipment.mainHand ?? '');
+    const charged = computeChargedAttackMultiplier(chargeSec);
     const res = startAttackAction(this.timeline, 'heavy_1', this.save.player.stamina, this.save.player.mana);
     if (!res.started || !res.attack) return;
-    this.save.player.stamina = Math.max(0, this.save.player.stamina - res.staminaCost);
+    if (this.timeline.activeAction) {
+      this.timeline.activeAction.attack = {
+        ...res.attack,
+        damage: Math.round(res.attack.damage * charged.damageMult),
+        poiseDamage: Math.round((res.attack.poiseDamage + charged.poiseBonus) * timing.poiseMult),
+        windupMs: Math.round(res.attack.windupMs * timing.windupMult),
+        recoveryMs: Math.round(res.attack.recoveryMs * timing.recoveryMult),
+      };
+    }
+    this.save.player.stamina = Math.max(0, this.save.player.stamina - Math.round(res.staminaCost * timing.staminaMult));
     this.staminaRegenDelaySec = 0.85;
     this.faceLockOrCamera();
-    this.setKaelenClip('HeavyAttack', false);
+    this.combatVfx.clearWeaponTrail();
+    this.setKaelenClip('HeavyAttack', false, 1 / timing.windupMult);
     this.audio.playSlash(true);
-    this.spawnSlashArc(this.save.player.x, this.save.player.y + 1.2, this.save.player.z, this.save.player.yaw, 0x6d9cb6, 2.6);
+    if (charged.isFullyCharged) {
+      this.cinematicCamera.triggerZoomPulse(-3.2);
+    }
   }
 
   private tryPlayerDodge(): void {
     if (this.mode !== 'playing') return;
     const res = startDodgeAction(this.timeline, this.save.player.stamina, 18);
-    if (!res.started) return;
+    if (!res.started) {
+      queueCombatInput(this.inputBuffer, 'dodge', performance.now());
+      return;
+    }
     this.save.player.stamina = Math.max(0, this.save.player.stamina - res.staminaCost);
     this.staminaRegenDelaySec = 0.7;
+    this.combatVfx.clearWeaponTrail();
     this.setKaelenClip('Dodge', false);
-    this.audio.playFootstep(true);
+    this.audio.playFootstep(true, getSurfaceKindAt(this.save.player.x, this.save.player.z));
+    this.combatVfx.spawnSnowDust(new THREE.Vector3(this.save.player.x, this.save.player.y, this.save.player.z), 6);
   }
 
   private tryPlayerGuard(): void {
     if (this.mode !== 'playing') return;
+    this.ensureWeaponDrawn();
     const stats = computeDerivedStats(this.save);
     const diff = DIFFICULTY_TUNING[this.settings.difficulty];
     if (startGuardAction(this.timeline, stats.parryWindowMs + diff.parryBonusMs)) {
@@ -1692,15 +1906,17 @@ export class EidrathEngine {
     this.faceLockOrCamera();
     this.setKaelenClip('Cast', false);
 
+    const origin = new THREE.Vector3(this.save.player.x, this.save.player.y + 1.15, this.save.player.z);
     if (abilityId === 'ability_frost_lance') {
       this.audio.playSpell('frost');
+      this.combatVfx.spawnImpactSparks(origin, 'frost');
       this.spawnPlayerProjectile(res.attack, 0x6d9cb6, 28);
     } else if (abilityId === 'ability_hearth_flame') {
       this.audio.playSpell('fire');
-      this.spawnSlashArc(this.save.player.x, this.save.player.y + 1.15, this.save.player.z, this.save.player.yaw, 0xd97636, 4.2);
+      this.combatVfx.spawnImpactSparks(origin, 'fire');
     } else {
       this.audio.playSpell('oath');
-      this.spawnSlashArc(this.save.player.x, this.save.player.y + 1.1, this.save.player.z, this.save.player.yaw, 0x7cb7d4, 5.8);
+      this.combatVfx.spawnImpactSparks(origin, 'oath');
       this.triggerShake(0.28, 0.22);
     }
   }
@@ -1816,25 +2032,6 @@ export class EidrathEngine {
     });
   }
 
-  private spawnSlashArc(x: number, y: number, z: number, yaw: number, colorHex: number, radius: number): void {
-    const geo = new THREE.RingGeometry(radius * 0.55, radius, 16, 1, -Math.PI * 0.4, Math.PI * 0.8);
-    geo.rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshBasicMaterial({
-      color: colorHex,
-      transparent: true,
-      opacity: 0.72,
-      side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, y, z);
-    mesh.rotation.y = yaw;
-    this.worldGroup.add(mesh);
-    this.vfxList.push({ mesh, ttlSec: 0.22, maxTtl: 0.22 });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Main Simulation & Render Loop (clamped deltas, hitstop separated from UI)
-  // ---------------------------------------------------------------------------
   private loop = (ts: number): void => {
     if (this.disposed) return;
     this.rafId = requestAnimationFrame(this.loop);
@@ -1842,6 +2039,7 @@ export class EidrathEngine {
     const rawDt = Math.max(0.001, (ts - this.lastFrameTs) / 1000);
     this.lastFrameTs = ts;
     const dt = Math.min(0.05, rawDt); // Clamp pathological deltas
+    this.elapsedSec += dt;
 
     this.fpsAccum += rawDt;
     this.fpsFrames += 1;
@@ -1862,20 +2060,22 @@ export class EidrathEngine {
         Math.cos(t) * orbitR,
       );
       this.camera.lookAt(0, 1.8, 0);
-      this.renderer.render(this.scene, this.camera);
+      this.realisticRenderer.render();
       return;
     }
 
-    if (this.mode === 'playing') {
-      if (this.hitstopSec > 0) {
-        this.hitstopSec = Math.max(0, this.hitstopSec - dt);
-      } else {
-        this.stepSimulation(dt);
+    if (this.mode === 'playing' || this.mode === 'dialogue') {
+      if (this.mode === 'playing') {
+        if (this.hitstopSec > 0) {
+          this.hitstopSec = Math.max(0, this.hitstopSec - dt);
+        } else {
+          this.stepSimulation(dt);
+        }
       }
       this.updateCamera(dt);
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.realisticRenderer.render();
 
     this.hudThrottleAccum += dt;
     if (this.hudThrottleAccum >= 0.08) {
@@ -1919,10 +2119,10 @@ export class EidrathEngine {
       this.ascensionSec = Math.max(0, this.ascensionSec - dt);
       this.save.player.hp = Math.min(this.save.player.maxHp, this.save.player.hp + 2.5 * dt);
       this.playerLight.color.setHex(0x9c7848);
-      this.playerLight.intensity = 3.2;
+      this.playerLight.intensity = 2.6;
     } else {
       this.playerLight.color.setHex(0x6d9cb6);
-      this.playerLight.intensity = 0.85;
+      this.playerLight.intensity = 0.75;
     }
 
     // Stamina & mana regen
@@ -1937,44 +2137,129 @@ export class EidrathEngine {
     }
     this.save.player.mana = Math.min(this.save.player.maxMana, this.save.player.mana + 4.5 * dt);
 
-    // Advance combat action state machine
+    // Advance combat action state machine & flush buffered inputs on return to idle/locomotion
     advanceCombatTimeline(this.timeline, dtMs);
+    if (this.timeline.state === 'idle' || this.timeline.state === 'locomotion') {
+      const buffered = consumeBufferedInput(this.inputBuffer, performance.now());
+      if (buffered === 'light_attack') this.tryPlayerLightAttack();
+      else if (buffered === 'heavy_attack') this.tryPlayerHeavyAttack();
+      else if (buffered === 'dodge') this.tryPlayerDodge();
+    }
+
     if (this.timeline.state === 'active' && this.timeline.activeAction) {
       this.evaluatePlayerActiveHitbox();
+      // Sample weapon socket position for realistic blade ribbon trail
+      const handR = this.kaelen?.sockets.get('hand_r');
+      if (handR && this.timeline.activeAction.attack.hitShape !== 'projectile') {
+        const basePos = new THREE.Vector3();
+        handR.getWorldPosition(basePos);
+        const quat = new THREE.Quaternion();
+        handR.getWorldQuaternion(quat);
+        const tipPos = basePos.clone().add(new THREE.Vector3(0, -1.05, 0.15).applyQuaternion(quat));
+        this.combatVfx.addWeaponTrailSample(
+          basePos,
+          tipPos,
+          this.timeline.activeAction.attack.id === 'heavy_1' ? 0x9bd2f2 : 0xd8e2ea,
+        );
+      }
+    } else {
+      this.combatVfx.clearWeaponTrail();
+    }
+
+    // Auto-sheathe weapon gracefully after calm exploration out of combat
+    const inCombat = this.isInCombat();
+    if (!inCombat && this.timeline.state !== 'windup' && this.timeline.state !== 'active' && this.timeline.state !== 'guard') {
+      this.outOfCombatSec += dt;
+      if (this.weaponDrawn && this.outOfCombatSec > 8 && this.save.player.equipment.mainHand) {
+        this.weaponDrawn = false;
+        void this.refreshPlayerWeapons();
+      }
+    } else {
+      this.outOfCombatSec = 0;
     }
 
     // Player locomotion & collision
     this.updatePlayerMovement(dt);
 
-    // Stream / activate nearby chunks (keep 3x3 chunk radius visible for smooth FPS)
+    // Stream / activate nearby chunks (3x3 radius around player)
     const activeChunks = new Set(getActiveChunkKeys(this.save.player.x, this.save.player.z, 1));
     for (const [key, grp] of this.chunkGroups) {
       grp.visible = activeChunks.has(key);
     }
 
-    // Discovery check across Frostheim landmarks
+    // Discovery & regional audio / atmosphere state
     this.checkLandmarkDiscovery();
+    const inTomb = Math.hypot(this.save.player.x + 149, this.save.player.z - 149) < 12;
+    const inVillage = Math.hypot(this.save.player.x + 10, this.save.player.z - 36) < 34;
+    const targetMusic: MusicZone = this.activeBossId
+      ? 'boss'
+      : inCombat
+        ? 'combat'
+        : inTomb
+          ? 'tomb'
+          : inVillage
+            ? 'village'
+            : 'explore';
+    if (targetMusic !== this.currentMusicZone) {
+      this.currentMusicZone = targetMusic;
+      this.audio.setMusicState(targetMusic);
+    }
 
-    // Update Companion Lyra
+    const playerPosVec = new THREE.Vector3(this.save.player.x, this.save.player.y, this.save.player.z);
+    this.realisticRenderer.updateAtmosphere({
+      playerPos: playerPosVec,
+      dayPhase: this.save.world.worldTimeHours / 24,
+      inTomb,
+      nearBoss: Boolean(this.activeBossId),
+    });
+    this.waterUpdater?.(this.elapsedSec);
+
+    // Sync spatial Web Audio listener with camera orientation
+    const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    this.audio.updateListener(this.camera.position, camFwd);
+
+    // Update Companion Lyra, Enemies & Boss, Projectiles, Fissures, Particles
     this.updateCompanionLyra(dt);
-
-    // Update Enemies & Mountain Warden Boss
     this.updateEnemiesAndBoss(dt, dtMs);
-
-    // Update Projectiles, Fissures, VFX
     this.updateProjectiles(dt);
     this.updateFissures(dt);
-    this.updateVfx(dt);
+    this.combatVfx.update(dt);
 
-    // Update mixers
-    this.kaelen?.mixer?.update(dt);
-    this.lyra?.mixer?.update(dt);
-    for (const npc of this.npcs) npc.actor?.mixer?.update(dt);
-    for (const e of this.enemies) e.actor?.mixer?.update(dt);
+    // Decay directional enemy hit reactions cleanly
+    for (const [eid, hr] of this.hitReactions) {
+      hr.timer -= dt;
+      const e = this.enemies.find((x) => x.id === eid);
+      if (e?.actor) {
+        if (hr.timer <= 0) {
+          e.actor.model.rotation.x = 0;
+          e.actor.model.rotation.z = 0;
+          this.hitReactions.delete(eid);
+        } else {
+          const s = hr.timer / 0.24;
+          e.actor.model.rotation.x = hr.pitch * s;
+          e.actor.model.rotation.z = hr.roll * s;
+        }
+      } else {
+        this.hitReactions.delete(eid);
+      }
+    }
 
-    // Keep directional sun shadow frustum centered around Kaelen
-    this.sunLight.position.set(this.save.player.x + 48, this.save.player.y + 72, this.save.player.z + 36);
-    this.sunLight.target.position.set(this.save.player.x, this.save.player.y, this.save.player.z);
+    // Update mixers & normalized animation events
+    this.kaelenCtrl?.update(dt);
+    if (!this.kaelenCtrl) this.kaelen?.mixer?.update(dt);
+    this.lyraCtrl?.update(dt);
+    if (!this.lyraCtrl) this.lyra?.mixer?.update(dt);
+    for (const npc of this.npcs) {
+      const nc = this.npcCtrls.get(npc.id);
+      if (nc) nc.update(dt);
+      else npc.actor?.mixer?.update(dt);
+    }
+    for (const e of this.enemies) {
+      const ec = this.enemyCtrls.get(e.id);
+      if (ec) ec.update(dt);
+      else e.actor?.mixer?.update(dt);
+    }
+
     this.playerLight.position.set(this.save.player.x, this.save.player.y + 1.6, this.save.player.z);
   }
 
@@ -2095,19 +2380,31 @@ export class EidrathEngine {
       this.kaelen.root.rotation.y = this.save.player.yaw;
     }
 
-    // Locomotion animation + footsteps
-    if (this.timeline.state === 'idle' || this.timeline.state === 'locomotion') {
-      if (speedHoriz > 0.4) {
+    // Speed-synced locomotion animation (prevents foot sliding & supports crouch/strafe/sprint/jump/fall)
+    if (!this.playerGrounded) {
+      this.setKaelenClip(this.playerVelY > 1.2 ? 'Jump' : 'Fall', true);
+    } else if (this.timeline.state === 'idle' || this.timeline.state === 'locomotion') {
+      if (speedHoriz > 0.35 && !this.walkToggled) {
         this.timeline.state = 'locomotion';
-        this.setKaelenClip(speedHoriz > 6.2 ? 'Run' : 'Walk', true);
-        this.footstepAccum += dt * (speedHoriz > 6.2 ? 2.8 : 1.9);
-        if (this.footstepAccum >= 1) {
-          this.footstepAccum = 0;
-          this.audio.playFootstep(speedHoriz > 6.2);
+        if (this.isSneaking) {
+          this.setKaelenClip('CrouchWalk', true, Math.max(0.75, speedHoriz / 3.1));
+        } else if (lockedTarget && Math.abs(inX) > Math.abs(inZ) + 0.15) {
+          this.setKaelenClip(inX < 0 ? 'StrafeLeft' : 'StrafeRight', true, Math.max(0.8, speedHoriz / 4.2));
+        } else if (lockedTarget && inZ < -0.25) {
+          this.setKaelenClip('WalkBack', true, Math.max(0.8, speedHoriz / 4.0));
+        } else if (speedHoriz > 6.4) {
+          this.setKaelenClip('Sprint', true, Math.max(0.9, speedHoriz / 7.8));
+        } else if (speedHoriz > 4.6) {
+          this.setKaelenClip('Run', true, Math.max(0.85, speedHoriz / 5.4));
+        } else {
+          this.setKaelenClip('Walk', true, Math.max(0.75, speedHoriz / 3.0));
         }
+      } else if (speedHoriz > 0.25 && this.walkToggled) {
+        this.timeline.state = 'locomotion';
+        this.setKaelenClip('Walk', true, Math.max(0.7, speedHoriz / 2.8));
       } else {
         this.timeline.state = 'idle';
-        this.setKaelenClip('Idle', true);
+        this.setKaelenClip(this.isSneaking ? 'CrouchIdle' : 'Idle', true, 1.0);
       }
     }
   }
@@ -2195,8 +2492,23 @@ export class EidrathEngine {
     enemy.awareness = 100;
     this.save.player.divineMeter = Math.min(100, this.save.player.divineMeter + (heavyFeedback ? 9 : 5));
     this.audio.playHitImpact(heavyFeedback);
-    this.hitstopSec = heavyFeedback ? 0.065 : 0.04;
+    this.hitstopSec = heavyFeedback ? 0.062 : 0.036;
     if (heavyFeedback) this.triggerShake(0.16, 0.14);
+
+    // Directional impact sparks + physical hit flinch
+    const hitPos = new THREE.Vector3(enemy.x, enemy.y + 1.35, enemy.z);
+    this.combatVfx.spawnImpactSparks(hitPos, enemy.isBoss ? 'oath' : 'steel');
+    const hitDir = classifyHitDirection(
+      { x: this.save.player.x, z: this.save.player.z },
+      { x: enemy.x, z: enemy.z },
+      enemy.yaw,
+    );
+    const mag = heavyFeedback ? 0.28 : 0.16;
+    this.hitReactions.set(enemy.id, {
+      pitch: hitDir === 'front' ? -mag : hitDir === 'back' ? mag : 0,
+      roll: hitDir === 'left' ? -mag : hitDir === 'right' ? mag : 0,
+      timer: 0.24,
+    });
 
     if (enemy.hp <= 0) {
       this.handleEnemyDeath(enemy);
@@ -2214,7 +2526,7 @@ export class EidrathEngine {
       enemy.aiState = 'engage';
     }
 
-    // Mountain Warden Boss Phase Transitions!
+    // Mountain Warden Boss Phase Transitions + Destructible Outer Bronze Armor Plates!
     if (enemy.isBoss) {
       const nextPhase = getMountainWardenPhase(enemy.hp, enemy.maxHp);
       if (nextPhase.phase !== enemy.bossPhase) {
@@ -2222,8 +2534,23 @@ export class EidrathEngine {
         this.showBanner(nextPhase.transitionBanner);
         this.audio.playWardenSlam();
         this.triggerShake(0.35, 0.28);
+
+        if (enemy.actor) {
+          const dropNames =
+            nextPhase.phase === 2
+              ? ['ArmorPlate_LeftShoulder', 'ArmorPlate_RightShoulder']
+              : ['ArmorPlate_Chest', 'ArmorPlate_Crown'];
+          enemy.actor.model.traverse((obj) => {
+            if (dropNames.some((n) => obj.name.includes(n))) {
+              obj.visible = false;
+              const wp = new THREE.Vector3();
+              obj.getWorldPosition(wp);
+              this.combatVfx.spawnImpactSparks(wp, 'steel');
+            }
+          });
+        }
+
         if (nextPhase.phase === 2) {
-          // Summon at most 2 Hollow adds (never endless adds)
           const existingAdds = this.enemies.filter((x) => x.isAdd && x.aiState !== 'dead').length;
           const toSpawn = Math.max(0, Math.min(2, nextPhase.maxAdds - existingAdds));
           for (let i = 0; i < toSpawn; i++) {
@@ -2304,6 +2631,11 @@ export class EidrathEngine {
       if (enemy.isBoss && dist < 30 && this.save.world.solvedPuzzles.includes('puzzle_keep_gate')) {
         bossActive = enemy;
         this.activeBossId = enemy.id;
+        if (!this.bossIntroPlayed) {
+          this.bossIntroPlayed = true;
+          this.cinematicCamera.startBossIntro(new THREE.Vector3(enemy.x, enemy.y, enemy.z));
+          this.audio.playWardenSlam();
+        }
       }
 
       if (enemy.attackCooldownMs > 0) enemy.attackCooldownMs = Math.max(0, enemy.attackCooldownMs - dtMs);
@@ -2486,6 +2818,7 @@ export class EidrathEngine {
 
     if (outcome.result === 'parried') {
       this.audio.playParryRing();
+      this.combatVfx.spawnImpactSparks(new THREE.Vector3(enemy.x, enemy.y + 1.4, enemy.z), 'parry');
       this.parryFlashSec = 0.45;
       this.hitstopSec = 0.075;
       enemy.aiState = 'stagger';
@@ -2612,7 +2945,8 @@ export class EidrathEngine {
         });
         if (this.lyraClip !== 'Cast') {
           this.lyraClip = 'Cast';
-          this.playActorClip(this.lyra, 'Cast', false);
+          if (this.lyraCtrl) this.lyraCtrl.play('Cast', { loop: false });
+          else this.playActorClip(this.lyra, 'Cast', false);
         }
       }
     }
@@ -2632,11 +2966,13 @@ export class EidrathEngine {
       const clip = spd > 5.5 ? 'Run' : 'Walk';
       if (this.lyraClip !== clip) {
         this.lyraClip = clip;
-        this.playActorClip(this.lyra, clip, true);
+        if (this.lyraCtrl) this.lyraCtrl.play(clip, { loop: true });
+        else this.playActorClip(this.lyra, clip, true);
       }
     } else if (this.lyraAttackCd < 1.9 && this.lyraClip !== 'Idle') {
       this.lyraClip = 'Idle';
-      this.playActorClip(this.lyra, 'Idle', true);
+      if (this.lyraCtrl) this.lyraCtrl.play('Idle', { loop: true });
+      else this.playActorClip(this.lyra, 'Idle', true);
     }
 
     this.lyra.root.position.copy(this.lyraPos);
@@ -2696,22 +3032,6 @@ export class EidrathEngine {
     }
   }
 
-  private updateVfx(dt: number): void {
-    for (let i = this.vfxList.length - 1; i >= 0; i--) {
-      const fx = this.vfxList[i];
-      fx.ttlSec -= dt;
-      const t = Math.max(0, fx.ttlSec / fx.maxTtl);
-      (fx.mesh.material as THREE.MeshBasicMaterial).opacity = t * 0.72;
-      fx.mesh.scale.setScalar(1 + (1 - t) * 0.3);
-      if (fx.ttlSec <= 0) {
-        this.worldGroup.remove(fx.mesh);
-        fx.mesh.geometry.dispose();
-        (fx.mesh.material as THREE.Material).dispose();
-        this.vfxList.splice(i, 1);
-      }
-    }
-  }
-
   private updateSnow(dt: number): void {
     if (!this.snowPoints || this.settings.reducedMotion) return;
     const pos = this.snowPoints.geometry.attributes.position as THREE.BufferAttribute;
@@ -2733,53 +3053,21 @@ export class EidrathEngine {
   }
 
   private updateCamera(dt: number): void {
-    const px = this.save.player.x;
-    const py = this.save.player.y;
-    const pz = this.save.player.z;
-
-    // Auto-orient camera subtly toward locked target
     const locked = this.lockedEnemyId
       ? this.enemies.find((e) => e.id === this.lockedEnemyId && e.aiState !== 'dead')
       : null;
-    if (locked) {
-      const targetCamYaw = Math.atan2(px - locked.x, pz - locked.z);
-      this.camYaw = this.lerpAngle(this.camYaw, targetCamYaw, Math.min(1, 7 * dt));
-    }
 
-    const inCombat = this.isInCombat();
-    const isBossFight = Boolean(this.activeBossId);
-    const boomDist = isBossFight ? 8.2 : inCombat ? 4.4 : 5.4;
-    const shoulderOffset = inCombat && !isBossFight ? 0.65 : 0.35;
-
-    const cosP = Math.cos(this.camPitch);
-    const sinP = Math.sin(this.camPitch);
-    const rightX = Math.cos(this.camYaw);
-    const rightZ = -Math.sin(this.camYaw);
-
-    let camX = px + Math.sin(this.camYaw) * boomDist * cosP + rightX * shoulderOffset;
-    let camZ = pz + Math.cos(this.camYaw) * boomDist * cosP + rightZ * shoulderOffset;
-    let camY = py + 1.65 + boomDist * sinP;
-
-    // Spring-arm terrain collision so camera never clips below snow/slate ground
-    const groundAtCam = getTerrainHeight(camX, camZ) + 0.55;
-    if (camY < groundAtCam) camY = groundAtCam;
-
-    if (this.camShakeSec > 0 && this.settings.cameraShake && !this.settings.reducedMotion) {
-      this.camShakeSec = Math.max(0, this.camShakeSec - dt);
-      camX += (Math.random() - 0.5) * this.camShakeAmp;
-      camY += (Math.random() - 0.5) * this.camShakeAmp;
-    }
-
-    this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), Math.min(1, 14 * dt));
-    if (locked) {
-      this.camera.lookAt(
-        (px + locked.x) * 0.5,
-        Math.max(py + 1.4, (py + locked.y) * 0.5 + 1.3),
-        (pz + locked.z) * 0.5,
-      );
-    } else {
-      this.camera.lookAt(px + rightX * shoulderOffset * 0.6, py + 1.55, pz + rightZ * shoulderOffset * 0.6);
-    }
+    this.cinematicCamera.update(this.camera, dt, {
+      playerPos: new THREE.Vector3(this.save.player.x, this.save.player.y, this.save.player.z),
+      playerYaw: this.save.player.yaw,
+      inCombat: this.isInCombat(),
+      isSprinting: (this.keys.has(this.settings.bindings.sprint) || this.keys.has('ShiftRight')) && Math.hypot(this.playerVelX, this.playerVelZ) > 6.2,
+      isBossFight: Boolean(this.activeBossId),
+      lockedTargetPos: locked ? new THREE.Vector3(locked.x, locked.y, locked.z) : null,
+      collisionMeshes: this.collisionMeshes,
+    });
+    this.camYaw = this.cinematicCamera.yaw;
+    this.camPitch = this.cinematicCamera.pitch;
   }
 
   private checkLandmarkDiscovery(): void {
@@ -2977,9 +3265,7 @@ export class EidrathEngine {
   }
 
   private triggerShake(durationSec: number, amplitude: number): void {
-    if (!this.settings.cameraShake || this.settings.reducedMotion) return;
-    this.camShakeSec = Math.max(this.camShakeSec, durationSec);
-    this.camShakeAmp = Math.max(this.camShakeAmp, amplitude);
+    this.cinematicCamera.triggerShake(durationSec, amplitude);
   }
 
   private lerpAngle(a: number, b: number, t: number): number {
@@ -2996,7 +3282,7 @@ export class EidrathEngine {
     const h = Math.max(240, this.container.clientHeight || window.innerHeight);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
+    this.realisticRenderer.resize(w, h);
   };
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -3018,6 +3304,10 @@ export class EidrathEngine {
     else if (e.code === b.sneak) {
       this.isSneaking = !this.isSneaking;
       this.notify(this.isSneaking ? 'Stealth stance enabled' : 'Standing stance');
+    } else if (e.code === 'KeyV') {
+      this.cinematicCamera.toggleShoulder();
+    } else if (e.code === 'AltLeft') {
+      this.walkToggled = !this.walkToggled;
     } else if (e.code === b.lockOn) this.toggleLockOn();
     else if (e.code === b.ascension) this.tryDivineAscension();
     else if (e.code === 'Digit1') this.tryAbilitySlot(0);
@@ -3042,7 +3332,12 @@ export class EidrathEngine {
       if (!this.pointerLocked && document.pointerLockElement !== this.renderer.domElement) {
         this.renderer.domElement.requestPointerLock?.();
       }
-      this.tryPlayerLightAttack();
+      if (e.shiftKey) {
+        this.chargingHeavy = true;
+        this.chargeStartTs = performance.now();
+      } else {
+        this.tryPlayerLightAttack();
+      }
     } else if (e.button === 1) {
       e.preventDefault();
       this.toggleLockOn();
@@ -3050,28 +3345,43 @@ export class EidrathEngine {
       this.rightMouseDrag = true;
       this.lastDragX = e.clientX;
       this.lastDragY = e.clientY;
-      this.tryPlayerHeavyAttack();
+      this.chargingHeavy = true;
+      this.chargeStartTs = performance.now();
     }
   };
 
   private onMouseUp = (e: MouseEvent): void => {
-    if (e.button === 2) this.rightMouseDrag = false;
+    if (e.button === 0 && this.chargingHeavy && e.shiftKey) {
+      const heldSec = (performance.now() - this.chargeStartTs) / 1000;
+      this.chargingHeavy = false;
+      this.tryPlayerHeavyAttack(heldSec);
+    }
+    if (e.button === 2) {
+      this.rightMouseDrag = false;
+      if (this.chargingHeavy) {
+        const heldSec = (performance.now() - this.chargeStartTs) / 1000;
+        this.chargingHeavy = false;
+        this.tryPlayerHeavyAttack(heldSec);
+      }
+    }
   };
 
   private onMouseMove = (e: MouseEvent): void => {
     if (this.mode !== 'playing') return;
     const sens = 0.0024 * this.settings.mouseSensitivity;
     if (this.pointerLocked) {
-      this.camYaw -= e.movementX * sens;
-      this.camPitch = Math.max(-0.2, Math.min(0.85, this.camPitch + e.movementY * sens));
+      this.cinematicCamera.yaw -= e.movementX * sens;
+      this.cinematicCamera.pitch = Math.max(-0.2, Math.min(0.85, this.cinematicCamera.pitch + e.movementY * sens));
     } else if (this.rightMouseDrag) {
       const dx = e.clientX - this.lastDragX;
       const dy = e.clientY - this.lastDragY;
       this.lastDragX = e.clientX;
       this.lastDragY = e.clientY;
-      this.camYaw -= dx * sens * 1.4;
-      this.camPitch = Math.max(-0.2, Math.min(0.85, this.camPitch + dy * sens * 1.4));
+      this.cinematicCamera.yaw -= dx * sens * 1.4;
+      this.cinematicCamera.pitch = Math.max(-0.2, Math.min(0.85, this.cinematicCamera.pitch + dy * sens * 1.4));
     }
+    this.camYaw = this.cinematicCamera.yaw;
+    this.camPitch = this.cinematicCamera.pitch;
   };
 
   private onContextMenu = (e: MouseEvent): void => {
@@ -3127,7 +3437,8 @@ export class EidrathEngine {
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     this.exitPointerLock();
     this.audio.dispose();
+    this.combatVfx.dispose();
     disposeObjectTree(this.scene);
-    this.renderer.dispose();
+    this.realisticRenderer.dispose();
   }
 }

@@ -318,3 +318,82 @@ export function computeStealthAwarenessDelta(params: {
   const stance = params.isSneaking ? 0.35 : params.isSprinting ? 1.65 : 1.0;
   return (22 + proximity * 95) * visibility * stance * params.dtSec;
 }
+
+export type BufferedCombatAction = 'light_attack' | 'heavy_attack' | 'dodge' | 'parry' | 'cast';
+
+export interface CombatInputBuffer {
+  action: BufferedCombatAction | null;
+  expiresAtMs: number;
+}
+
+export function createCombatInputBuffer(): CombatInputBuffer {
+  return { action: null, expiresAtMs: 0 };
+}
+
+export function queueCombatInput(
+  buf: CombatInputBuffer,
+  action: BufferedCombatAction,
+  nowMs: number,
+  windowMs = 240,
+): void {
+  buf.action = action;
+  buf.expiresAtMs = nowMs + windowMs;
+}
+
+export function consumeBufferedInput(buf: CombatInputBuffer, nowMs: number): BufferedCombatAction | null {
+  if (!buf.action) return null;
+  const act = nowMs <= buf.expiresAtMs ? buf.action : null;
+  buf.action = null;
+  buf.expiresAtMs = 0;
+  return act;
+}
+
+export interface WeaponMovesetTiming {
+  windupMult: number;
+  activeMult: number;
+  recoveryMult: number;
+  staminaMult: number;
+  poiseMult: number;
+  weightClass: 'fast' | 'balanced' | 'heavy';
+}
+
+export function getWeaponMovesetTiming(weaponId: string): WeaponMovesetTiming {
+  const id = weaponId.toLowerCase();
+  if (id.includes('nightpiercer') || id.includes('dagger') || id.includes('estoc')) {
+    return { windupMult: 0.78, activeMult: 0.88, recoveryMult: 0.80, staminaMult: 0.85, poiseMult: 0.85, weightClass: 'fast' };
+  }
+  if (id.includes('worldshatter') || id.includes('greatsword') || id.includes('oathbreaker') || id.includes('hammer')) {
+    return { windupMult: 1.32, activeMult: 1.18, recoveryMult: 1.28, staminaMult: 1.25, poiseMult: 1.45, weightClass: 'heavy' };
+  }
+  return { windupMult: 1.0, activeMult: 1.0, recoveryMult: 1.0, staminaMult: 1.0, poiseMult: 1.0, weightClass: 'balanced' };
+}
+
+export function computeChargedAttackMultiplier(chargeSec: number): { damageMult: number; poiseBonus: number; isFullyCharged: boolean } {
+  const t = Math.max(0, Math.min(1, chargeSec / 0.85));
+  return {
+    damageMult: 1.0 + t * 0.85,
+    poiseBonus: Math.round(t * 28),
+    isFullyCharged: chargeSec >= 0.75,
+  };
+}
+
+export type HitDirection = 'front' | 'back' | 'left' | 'right';
+
+export function classifyHitDirection(
+  attackerPos: { x: number; z: number },
+  defenderPos: { x: number; z: number },
+  defenderYaw: number,
+): HitDirection {
+  const dx = attackerPos.x - defenderPos.x;
+  const dz = attackerPos.z - defenderPos.z;
+  const fwdX = Math.sin(defenderYaw);
+  const fwdZ = Math.cos(defenderYaw);
+  const rightX = Math.cos(defenderYaw);
+  const rightZ = -Math.sin(defenderYaw);
+  const dotFwd = dx * fwdX + dz * fwdZ;
+  const dotRight = dx * rightX + dz * rightZ;
+  if (Math.abs(dotFwd) >= Math.abs(dotRight)) {
+    return dotFwd >= 0 ? 'front' : 'back';
+  }
+  return dotRight >= 0 ? 'right' : 'left';
+}

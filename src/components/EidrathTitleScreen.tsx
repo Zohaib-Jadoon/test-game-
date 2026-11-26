@@ -37,45 +37,37 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-30 flex flex-col justify-between p-6 sm:p-10 md:p-14 pointer-events-none"
+      className="fixed inset-0 z-30 flex flex-col justify-between p-6 sm:p-12 md:p-16 pointer-events-none eid-ornate-vignette"
       style={{
         background:
-          'linear-gradient(90deg, rgba(19,23,27,0.88) 0%, rgba(19,23,27,0.52) 45%, rgba(19,23,27,0.16) 100%)',
+          'linear-gradient(95deg, rgba(10,13,18,0.88) 0%, rgba(12,16,22,0.56) 44%, rgba(12,16,22,0.10) 100%)',
       }}
     >
-      {/* Top Crest & Subtitle */}
+      {/* Top Engraved Emblem */}
       <div className="pointer-events-auto max-w-xl">
         <div className="flex items-center gap-4 mb-3">
-          <img
-            src="/icon.svg"
-            alt="EIDRATH Oath Crest"
-            className="w-12 h-12 rounded-sm border border-[#9C7848]/60 bg-[#1B2024]/80 p-1"
-          />
+          <div className="w-14 h-14 flex items-center justify-center border border-[#b89552]/65 bg-[#11151b]/85 shadow-lg">
+            <img src="/icon.svg" alt="EIDRATH Oath Crest" className="w-10 h-10 object-contain" />
+          </div>
           <div>
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[#9C7848] font-semibold">
-              Act I · Frostheim Vertical Slice
+            <p className="text-[11px] uppercase tracking-[0.34em] text-[#b89552] font-medium">
+              Chronicles of Frostheim
             </p>
-            <h1
-              className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-[0.14em] text-[#D9D1BE]"
-              style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-            >
+            <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-[0.16em] text-[#efe4c8] drop-shadow-lg">
               EIDRATH
             </h1>
-            <p
-              className="text-sm sm:text-base tracking-[0.34em] uppercase text-[#9C7848] mt-0.5"
-              style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-            >
+            <p className="font-display text-sm sm:text-base tracking-[0.38em] uppercase text-[#dfc38a] mt-0.5">
               The Last Oath
             </p>
           </div>
         </div>
-        <div className="h-px w-56 bg-gradient-to-r from-[#9C7848] to-transparent my-4" />
-        <p className="text-sm text-[#D9D1BE]/80 italic leading-relaxed max-w-md">
+        <div className="eid-divider w-64 my-4" />
+        <p className="text-sm text-[#e4dcc8]/78 italic leading-relaxed max-w-md">
           “The gods created mankind to serve them. Now mankind must decide whether the gods deserve to live.”
         </p>
       </div>
 
-      {/* Main Navigation / Sub-panels */}
+      {/* Main Navigation & Sub-panels */}
       <div className="pointer-events-auto my-auto max-w-md w-full">
         {subView === 'main' && (
           <nav aria-label="Main Menu" className="flex flex-col gap-2.5">
@@ -83,20 +75,17 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
               <button
                 type="button"
                 onClick={() => onContinue(latestSave)}
-                className="group text-left px-5 py-3.5 border border-[#9C7848] bg-[#22272B]/90 hover:bg-[#2c3338] transition-colors flex items-center justify-between"
+                className="eid-btn-primary text-left px-5 py-3.5 flex items-center justify-between"
               >
                 <div>
-                  <span
-                    className="block text-base tracking-[0.16em] uppercase text-[#D9D1BE] font-semibold"
-                    style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-                  >
+                  <span className="font-display block text-base tracking-[0.18em] uppercase text-[#efe4c8] font-semibold">
                     Continue
                   </span>
-                  <span className="text-xs text-[#9C7848]">
+                  <span className="text-xs text-[#dfc38a]/85">
                     {latestSave.regionName} · Level {latestSave.player.level}
                   </span>
                 </div>
-                <span className="text-[#9C7848] text-xs tracking-widest">RESUME</span>
+                <span className="text-[#dfc38a] text-[10px] uppercase tracking-[0.26em]">Resume</span>
               </button>
             )}
 
@@ -106,79 +95,50 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
                 setDraftSettings(settings);
                 setSubView('new_setup');
               }}
-              className="text-left px-5 py-3 border border-[#68717A]/60 bg-[#1B2024]/85 hover:border-[#9C7848] hover:bg-[#252B30] transition-colors"
+              className="eid-btn-ghost text-left px-5 py-3"
             >
-              <span
-                className="block text-base tracking-[0.16em] uppercase text-[#D9D1BE]"
-                style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-              >
-                New Game
-              </span>
+              <span className="font-display block text-base tracking-[0.18em] uppercase">New Game</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSubView('load')}
               disabled={validSlots.length === 0}
-              className="text-left px-5 py-3 border border-[#68717A]/50 bg-[#1B2024]/80 hover:border-[#9C7848] hover:bg-[#252B30] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-between"
+              className="eid-btn-ghost text-left px-5 py-3 disabled:opacity-35 disabled:cursor-not-allowed flex items-center justify-between"
             >
-              <span
-                className="text-base tracking-[0.16em] uppercase text-[#D9D1BE]"
-                style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-              >
-                Load Game
-              </span>
-              <span className="text-xs text-[#68717A]">{validSlots.length} slot(s)</span>
+              <span className="font-display text-base tracking-[0.18em] uppercase">Load Game</span>
+              <span className="text-[11px] font-mono-num text-[#b89552]">{validSlots.length} slot(s)</span>
             </button>
 
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="text-left px-5 py-3 border border-[#68717A]/50 bg-[#1B2024]/80 hover:border-[#9C7848] hover:bg-[#252B30] transition-colors"
-            >
-              <span
-                className="text-base tracking-[0.16em] uppercase text-[#D9D1BE]"
-                style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-              >
-                Settings
-              </span>
+            <button type="button" onClick={onOpenSettings} className="eid-btn-ghost text-left px-5 py-3">
+              <span className="font-display text-base tracking-[0.18em] uppercase">Settings</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSubView('credits')}
-              className="text-left px-5 py-3 border border-[#68717A]/40 bg-[#1B2024]/75 hover:border-[#9C7848] hover:bg-[#252B30] transition-colors"
+              className="eid-btn-ghost text-left px-5 py-3"
             >
-              <span
-                className="text-base tracking-[0.16em] uppercase text-[#D9D1BE]/90"
-                style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-              >
-                Credits
-              </span>
+              <span className="font-display text-base tracking-[0.18em] uppercase">Credits</span>
             </button>
           </nav>
         )}
 
         {subView === 'new_setup' && (
-          <div className="border border-[#9C7848]/70 bg-[#1B2024]/95 p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#68717A]/30 pb-2">
-              <h2
-                className="text-lg uppercase tracking-[0.16em] text-[#D9D1BE]"
-                style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-              >
-                Begin Your Oath
-              </h2>
+          <div className="eid-panel p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#b89552]/25 pb-2">
+              <h2 className="font-display text-lg uppercase tracking-[0.18em] text-[#efe4c8]">Begin Your Oath</h2>
               <button
                 type="button"
                 onClick={() => setSubView('main')}
-                className="text-xs uppercase tracking-widest text-[#68717A] hover:text-[#D9D1BE]"
+                className="text-xs uppercase tracking-widest text-[#b89552] hover:text-[#efe4c8]"
               >
                 Back
               </button>
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-widest text-[#9C7848] mb-2">Difficulty</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-[#b89552] mb-2">Difficulty</p>
               <div className="grid grid-cols-2 gap-2">
                 {DIFFICULTIES.map((d) => (
                   <button
@@ -187,12 +147,12 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
                     onClick={() => setDraftSettings({ ...draftSettings, difficulty: d.id })}
                     className={`p-2.5 text-left border transition-colors ${
                       draftSettings.difficulty === d.id
-                        ? 'border-[#9C7848] bg-[#2a3035] text-[#D9D1BE]'
-                        : 'border-[#68717A]/40 bg-[#161a1e] text-[#D9D1BE]/70 hover:border-[#9C7848]/60'
+                        ? 'border-[#dfc38a] bg-[#2a2419]/90 text-[#efe4c8]'
+                        : 'border-[#b89552]/25 bg-[#0e1217]/80 text-[#e4dcc8]/70 hover:border-[#b89552]/60'
                     }`}
                   >
                     <div className="text-xs font-semibold uppercase tracking-wider">{d.label}</div>
-                    <div className="text-[11px] text-[#D9D1BE]/65 mt-0.5 leading-snug">{d.desc}</div>
+                    <div className="text-[11px] text-[#e4dcc8]/65 mt-0.5 leading-snug">{d.desc}</div>
                   </button>
                 ))}
               </div>
@@ -200,17 +160,17 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
 
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-widest text-[#9C7848]">Graphics Quality</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-[#b89552]">Graphics Quality</p>
                 <div className="flex gap-1.5 mt-1">
-                  {(['low', 'medium', 'high'] as QualityPreset[]).map((q) => (
+                  {(['low', 'medium', 'high', 'ultra'] as QualityPreset[]).map((q) => (
                     <button
                       key={q}
                       type="button"
                       onClick={() => setDraftSettings({ ...draftSettings, quality: q })}
-                      className={`px-3 py-1 text-xs uppercase border ${
+                      className={`px-2.5 py-1 text-[11px] uppercase border ${
                         draftSettings.quality === q
-                          ? 'border-[#9C7848] bg-[#2a3035] text-[#D9D1BE]'
-                          : 'border-[#68717A]/40 text-[#D9D1BE]/70'
+                          ? 'border-[#dfc38a] bg-[#2a2419] text-[#efe4c8]'
+                          : 'border-[#b89552]/25 text-[#e4dcc8]/70'
                       }`}
                     >
                       {q}
@@ -219,12 +179,12 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-xs text-[#D9D1BE] cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-[#e4dcc8] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={draftSettings.subtitles}
                   onChange={(e) => setDraftSettings({ ...draftSettings, subtitles: e.target.checked })}
-                  className="accent-[#9C7848]"
+                  className="accent-[#b89552]"
                 />
                 Subtitles
               </label>
@@ -236,8 +196,7 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
                 onUpdateSettings(draftSettings);
                 onNewGame(draftSettings);
               }}
-              className="w-full py-3 border border-[#9C7848] bg-[#9C7848]/20 hover:bg-[#9C7848]/35 text-[#D9D1BE] uppercase tracking-[0.2em] text-sm font-semibold transition-colors"
-              style={{ fontFamily: "'Cinzel', Georgia, serif" }}
+              className="eid-btn-primary w-full py-3 uppercase tracking-[0.22em] text-sm font-semibold font-display"
             >
               Wake in Oathgrave Tomb
             </button>
@@ -245,18 +204,13 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
         )}
 
         {subView === 'load' && (
-          <div className="border border-[#9C7848]/70 bg-[#1B2024]/95 p-5 space-y-3">
-            <div className="flex items-center justify-between border-b border-[#68717A]/30 pb-2">
-              <h2
-                className="text-lg uppercase tracking-[0.16em] text-[#D9D1BE]"
-                style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-              >
-                Load Chronicle
-              </h2>
+          <div className="eid-panel p-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-[#b89552]/25 pb-2">
+              <h2 className="font-display text-lg uppercase tracking-[0.18em] text-[#efe4c8]">Load Chronicle</h2>
               <button
                 type="button"
                 onClick={() => setSubView('main')}
-                className="text-xs uppercase tracking-widest text-[#68717A] hover:text-[#D9D1BE]"
+                className="text-xs uppercase tracking-widest text-[#b89552] hover:text-[#efe4c8]"
               >
                 Back
               </button>
@@ -266,16 +220,16 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
                 key={slotId}
                 type="button"
                 onClick={() => onLoadSlot(save)}
-                className="w-full text-left p-3 border border-[#68717A]/45 hover:border-[#9C7848] bg-[#22272B]/80 flex items-center justify-between"
+                className="eid-btn-ghost w-full text-left p-3 flex items-center justify-between"
               >
                 <div>
-                  <div className="text-xs uppercase tracking-widest text-[#9C7848]">{slotId.replace('_', ' ')}</div>
-                  <div className="text-sm text-[#D9D1BE] font-medium">{save.regionName}</div>
-                  <div className="text-[11px] text-[#D9D1BE]/65">
+                  <div className="text-[11px] uppercase tracking-widest text-[#b89552]">{slotId.replace('_', ' ')}</div>
+                  <div className="text-sm text-[#efe4c8] font-medium">{save.regionName}</div>
+                  <div className="text-[11px] text-[#e4dcc8]/65">
                     Level {save.player.level} · {save.player.gold} Gold · {Math.floor(save.playtimeSec / 60)}m played
                   </div>
                 </div>
-                <span className="text-[11px] text-[#68717A]">
+                <span className="text-[11px] text-[#7fa8c4] font-mono-num">
                   {new Date(save.updatedAt).toLocaleDateString()}
                 </span>
               </button>
@@ -284,38 +238,34 @@ export const EidrathTitleScreen: React.FC<EidrathTitleScreenProps> = ({
         )}
 
         {subView === 'credits' && (
-          <div className="border border-[#9C7848]/70 bg-[#1B2024]/95 p-5 space-y-3 text-sm text-[#D9D1BE]/85">
-            <div className="flex items-center justify-between border-b border-[#68717A]/30 pb-2">
-              <h2
-                className="text-lg uppercase tracking-[0.16em] text-[#D9D1BE]"
-                style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-              >
-                Credits
-              </h2>
+          <div className="eid-panel p-6 space-y-3 text-sm text-[#e4dcc8]/85">
+            <div className="flex items-center justify-between border-b border-[#b89552]/25 pb-2">
+              <h2 className="font-display text-lg uppercase tracking-[0.18em] text-[#efe4c8]">Credits</h2>
               <button
                 type="button"
                 onClick={() => setSubView('main')}
-                className="text-xs uppercase tracking-widest text-[#68717A] hover:text-[#D9D1BE]"
+                className="text-xs uppercase tracking-widest text-[#b89552] hover:text-[#efe4c8]"
               >
                 Back
               </button>
             </div>
             <p>
-              <strong className="text-[#9C7848]">EIDRATH: The Last Oath</strong> — Original open-world dark-fantasy
-              action RPG built on Three.js, React 19, TypeScript, and Blender 5.3 original `.glb` / `.blend` assets.
+              <strong className="text-[#dfc38a]">EIDRATH: The Last Oath</strong> — Dark-fantasy third-person action
+              RPG forged in Frostheim.
             </p>
-            <p className="text-xs text-[#D9D1BE]/70">
-              All 55 Frostheim character, enemy, Mountain Warden boss, weapon, architectural, and prop assets were
-              authored through reproducible Blender 5.3 pipelines. Core single-player campaign runs 100% offline.
+            <p className="text-xs text-[#e4dcc8]/70 leading-relaxed">
+              PBR materials & HDRI lighting from PolyHaven & ambientCG (CC0), human anatomy via MakeHuman/MPFB2,
+              animations from Three.js Mixamo rigs (MIT), orchestral scores by Scott Buckley (CC BY 4.0), and audio
+              FOLEY normalized from OpenGameArt/LibriVox/procedural synthesis.
             </p>
           </div>
         )}
       </div>
 
-      {/* Bottom Status Strip */}
-      <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#D9D1BE]/65 border-t border-[#68717A]/25 pt-3">
-        <span>Offline Single-Player Ready · 55 Original Blender 5.3 Assets</span>
-        <span>WASD Move · LMB/RMB Combat · Q Parry/Block · Space Dodge · E Interact · I/K/M/J Menus</span>
+      {/* Bottom Controls Legend */}
+      <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#e4dcc8]/60 border-t border-[#b89552]/20 pt-3">
+        <span className="tracking-wider uppercase text-[#b89552]/80">Frostheim · Single-Player</span>
+        <span>WASD Move · LMB/RMB Attack · V Shoulder · Q Parry · Space Dodge · E Interact · I/K/M/J</span>
       </div>
     </div>
   );

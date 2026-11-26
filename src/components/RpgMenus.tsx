@@ -23,6 +23,38 @@ import type {
   SaveGame,
   SkillTreeId,
 } from '../game/types';
+import { FrostheimTopographicMap } from './FrostheimTopographicMap';
+import { InventoryPreview3D } from './InventoryPreview3D';
+
+const ItemCategoryIcon: React.FC<{ type: string }> = ({ type }) => {
+  if (type === 'weapon' || type === 'shield') {
+    return (
+      <svg className="w-4 h-4 text-[#dfc38a] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M14.5 3.5L20.5 9.5L9 21H3V15L14.5 3.5Z" />
+        <path d="M12 6L18 12" />
+      </svg>
+    );
+  }
+  if (type === 'armor') {
+    return (
+      <svg className="w-4 h-4 text-[#7fa8c4] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M12 3L4 6V12C4 16.8 7.4 20.6 12 22C16.6 20.6 20 16.8 20 12V6L12 3Z" />
+      </svg>
+    );
+  }
+  if (type === 'consumable') {
+    return (
+      <svg className="w-4 h-4 text-[#d46a64] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M9 3H15V6L19 12V19A2 2 0 0 1 17 21H7A2 2 0 0 1 5 19V12L9 6V3Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="w-4 h-4 text-[#b89552] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <polygon points="12 2 19 8 19 16 12 22 5 16 5 8 12 2" />
+    </svg>
+  );
+};
 
 export type RpgMenuTab =
   | 'inventory'
@@ -123,7 +155,6 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
   );
   const [selectedTree, setSelectedTree] = useState<SkillTreeId>('warrior');
   const [journalSub, setJournalSub] = useState<'quests' | 'lore' | 'world'>('quests');
-  const [mapZoom, setMapZoom] = useState<number>(1);
   const [listeningBind, setListeningBind] = useState<keyof KeyBindings | null>(null);
 
   const stats = computeDerivedStats(save);
@@ -174,11 +205,11 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-[#101417]/88 flex items-center justify-center p-3 sm:p-6"
+      className="fixed inset-0 z-40 bg-[#090c10]/90 flex items-center justify-center p-3 sm:p-6"
       onKeyDown={listeningBind ? handleBindKeyCapture : undefined}
       tabIndex={-1}
     >
-      <div className="w-full max-w-5xl max-h-[90vh] flex flex-col border border-[#9C7848]/80 bg-[#1B2024] text-[#D9D1BE] shadow-2xl">
+      <div className="eid-panel w-full max-w-6xl max-h-[92vh] flex flex-col text-[#e4dcc8]">
         {/* Top Tab Navigation */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#68717A]/35 px-4 py-3 bg-[#161A1E]">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -228,13 +259,14 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
           {/* INVENTORY & EQUIPMENT */}
           {activeTab === 'inventory' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              {/* Left: Equipped Gear & Derived Stats */}
+              {/* Left: Live 3D Rotating Kaelen Loadout + Equipped Gear & Stats */}
               <div className="lg:col-span-4 space-y-3">
-                <div className="border border-[#68717A]/40 bg-[#22272B] p-3.5 space-y-2">
-                  <h3
-                    className="text-sm uppercase tracking-[0.15em] text-[#9C7848]"
-                    style={{ fontFamily: "'Cinzel', Georgia, serif" }}
-                  >
+                <InventoryPreview3D
+                  mainHandId={save.player.equipment.mainHand ?? null}
+                  offHandId={save.player.equipment.offHand ?? null}
+                />
+                <div className="eid-panel p-3.5 space-y-2">
+                  <h3 className="font-display text-sm uppercase tracking-[0.15em] text-[#dfc38a]">
                     Kaelen — Equipped
                   </h3>
                   {(['mainHand', 'offHand', 'chest', 'cloak', 'amulet'] as EquipSlot[]).map((slot) => {
@@ -242,9 +274,9 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                     const def = id ? ITEMS[id] : null;
                     const entry = id ? save.player.inventory.find((e) => e.itemId === id) : null;
                     return (
-                      <div key={slot} className="flex items-center justify-between text-xs border-b border-[#68717A]/20 pb-1">
-                        <span className="uppercase text-[10px] text-[#68717A]">{slot}</span>
-                        <span className="text-[#D9D1BE]">
+                      <div key={slot} className="flex items-center justify-between text-xs border-b border-[#b89552]/15 pb-1">
+                        <span className="uppercase text-[10px] text-[#7fa8c4]">{slot}</span>
+                        <span className="text-[#efe4c8]">
                           {def ? `${def.name}${entry?.upgradeLevel ? ` +${entry.upgradeLevel}` : ''}` : '— Empty —'}
                         </span>
                       </div>
@@ -252,25 +284,25 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                   })}
                 </div>
 
-                <div className="border border-[#68717A]/40 bg-[#22272B] p-3.5 text-xs space-y-1.5 font-mono">
+                <div className="eid-panel p-3.5 text-xs space-y-1.5 font-mono-num">
                   <div className="flex justify-between">
-                    <span className="text-[#9C7848]">Weapon Power</span>
+                    <span className="text-[#b89552]">Weapon Power</span>
                     <span>{stats.weaponDamage}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#9C7848]">Armor Rating</span>
+                    <span className="text-[#b89552]">Armor Rating</span>
                     <span>{stats.armor}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#9C7848]">Poise</span>
+                    <span className="text-[#b89552]">Poise</span>
                     <span>{stats.poise}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#9C7848]">Crit Chance</span>
+                    <span className="text-[#b89552]">Crit Chance</span>
                     <span>{Math.round(stats.critChance * 100)}%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#9C7848]">Parry Window</span>
+                    <span className="text-[#b89552]">Parry Window</span>
                     <span>{stats.parryWindowMs} ms</span>
                   </div>
                 </div>
@@ -308,15 +340,18 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                             : 'border-[#68717A]/35 bg-[#22272B]/80 hover:border-[#9C7848]/60'
                         }`}
                       >
-                        <div>
-                          <div className="text-xs font-semibold text-[#D9D1BE]">
-                            {def.name}
-                            {entry.upgradeLevel ? ` +${entry.upgradeLevel}` : ''}
-                            {entry.quantity > 1 ? ` ×${entry.quantity}` : ''}
-                          </div>
-                          <div className="text-[10px] uppercase tracking-wider text-[#68717A]">
-                            {def.rarity} · {def.type}
-                            {def.twoHanded ? ' · 2H' : ''}
+                        <div className="flex items-center gap-2.5">
+                          <ItemCategoryIcon type={def.type} />
+                          <div>
+                            <div className="text-xs font-semibold text-[#efe4c8]">
+                              {def.name}
+                              {entry.upgradeLevel ? ` +${entry.upgradeLevel}` : ''}
+                              {entry.quantity > 1 ? ` ×${entry.quantity}` : ''}
+                            </div>
+                            <div className="text-[10px] uppercase tracking-wider text-[#b89552]/75">
+                              {def.rarity} · {def.type}
+                              {def.twoHanded ? ' · 2H' : ''}
+                            </div>
                           </div>
                         </div>
                         {isEquipped && (
@@ -529,82 +564,20 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
             </div>
           )}
 
-          {/* FROSTHEIM WORLD MAP & FAST TRAVEL */}
+          {/* FROSTHEIM TOPOGRAPHIC ATLAS & FAST TRAVEL */}
           {activeTab === 'map' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-8 border border-[#68717A]/50 bg-[#171E24] p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="uppercase tracking-widest text-[#9C7848]">Frostheim Atlas (500m × 500m)</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setMapZoom((z) => Math.max(1, Number((z - 0.25).toFixed(2))))}
-                      className="px-2 py-0.5 border border-[#68717A]/50"
-                    >
-                      −
-                    </button>
-                    <span className="font-mono text-[11px]">{Math.round(mapZoom * 100)}%</span>
-                    <button
-                      type="button"
-                      onClick={() => setMapZoom((z) => Math.min(2, Number((z + 0.25).toFixed(2))))}
-                      className="px-2 py-0.5 border border-[#68717A]/50"
-                    >
-                      +
-                    </button>
-                  </div>
+              <div className="lg:col-span-8 eid-panel p-3.5 space-y-2">
+                <div className="text-xs uppercase tracking-widest text-[#dfc38a] font-display">
+                  Frostheim Atlas (500m × 500m)
                 </div>
-
-                <div className="relative w-full aspect-square max-h-[430px] overflow-hidden border border-[#9C7848]/40 bg-[#1F2A33]">
-                  <svg
-                    viewBox="-250 -250 500 500"
-                    className="w-full h-full"
-                    style={{ transform: `scale(${mapZoom})`, transformOrigin: 'center center' }}
-                  >
-                    {/* Snow relief contours & Frozen Lake */}
-                    <circle cx={0} cy={0} r={224} fill="#2A3640" stroke="#4D5C68" strokeWidth={3} strokeDasharray="6 6" />
-                    <circle cx={96} cy={-58} r={28} fill="#4E7287" opacity={0.75} />
-
-                    {/* Winding Frostheim Roads */}
-                    <polyline
-                      points="-145,145 -72,92 -10,36 6,-116 6,-146"
-                      fill="none"
-                      stroke="#7D7265"
-                      strokeWidth={4}
-                      strokeDasharray="6 4"
-                    />
-                    <polyline points="-10,36 -96,-12" fill="none" stroke="#7D7265" strokeWidth={3} />
-                    <polyline points="-10,36 84,18 112,-74" fill="none" stroke="#7D7265" strokeWidth={3} />
-
-                    {/* Landmarks (Fog-of-War revealed upon discovery) */}
-                    {FROSTHEIM_LANDMARKS.map((lm) => {
-                      const discovered = save.world.discoveredLandmarks.includes(lm.id);
-                      return (
-                        <g key={lm.id} transform={`translate(${lm.x}, ${lm.z})`}>
-                          <circle
-                            r={discovered ? 9 : 6}
-                            fill={discovered ? (lm.kind === 'keep' ? '#7D3834' : '#9C7848') : '#3B444D'}
-                            stroke="#D9D1BE"
-                            strokeWidth={discovered ? 2 : 1}
-                            opacity={discovered ? 1 : 0.45}
-                          />
-                          <text
-                            y={18}
-                            textAnchor="middle"
-                            fontSize={11}
-                            fill={discovered ? '#D9D1BE' : '#68717A'}
-                          >
-                            {discovered ? lm.name : 'Undiscovered'}
-                          </text>
-                        </g>
-                      );
-                    })}
-
-                    {/* Player Position Marker */}
-                    <g transform={`translate(${save.player.x}, ${save.player.z})`}>
-                      <circle r={7} fill="#6D9CB6" stroke="#FFFFFF" strokeWidth={2} />
-                    </g>
-                  </svg>
-                </div>
+                <FrostheimTopographicMap
+                  playerX={save.player.x}
+                  playerZ={save.player.z}
+                  playerYaw={save.player.yaw}
+                  discoveredLandmarks={save.world.discoveredLandmarks}
+                  onFastTravel={(id) => runAction(onFastTravel(id))}
+                />
               </div>
 
               <div className="lg:col-span-4 space-y-2">
@@ -902,15 +875,15 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                   </div>
                 )}
 
-                <div className="border border-[#68717A]/45 bg-[#22272B] p-4 space-y-3 text-xs">
-                  <h4 className="text-sm uppercase tracking-widest text-[#9C7848]">Graphics, Audio & Accessibility</h4>
+                <div className="eid-panel p-4 space-y-3 text-xs">
+                  <h4 className="font-display text-sm uppercase tracking-widest text-[#dfc38a]">Graphics, Camera, Audio & Accessibility</h4>
 
                   <div className="flex items-center justify-between">
                     <span>Difficulty</span>
                     <select
                       value={settings.difficulty}
                       onChange={(e) => onUpdateSettings({ ...settings, difficulty: e.target.value as DifficultyId })}
-                      className="bg-[#171B1E] border border-[#68717A]/60 px-2 py-1"
+                      className="bg-[#0d1117] border border-[#b89552]/35 px-2 py-1"
                     >
                       <option value="story">Story</option>
                       <option value="normal">Normal</option>
@@ -924,26 +897,63 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                     <select
                       value={settings.quality}
                       onChange={(e) => onUpdateSettings({ ...settings, quality: e.target.value as QualityPreset })}
-                      className="bg-[#171B1E] border border-[#68717A]/60 px-2 py-1"
+                      className="bg-[#0d1117] border border-[#b89552]/35 px-2 py-1"
                     >
-                      <option value="low">Low (Mobile / Max FPS)</option>
-                      <option value="medium">Medium (Balanced)</option>
-                      <option value="high">High (2K Shadows)</option>
+                      <option value="low">Low (Max FPS)</option>
+                      <option value="medium">Medium (Balanced Bloom)</option>
+                      <option value="high">High (2K Shadows + Bloom)</option>
+                      <option value="ultra">Ultra (4K Shadows + Full IBL)</option>
                     </select>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span>Master Volume ({Math.round(settings.masterVolume * 100)}%)</span>
+                    <span>Field of View ({settings.fov}°)</span>
                     <input
                       type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={settings.masterVolume}
-                      onChange={(e) => onUpdateSettings({ ...settings, masterVolume: Number(e.target.value) })}
-                      className="accent-[#9C7848]"
+                      min={48}
+                      max={72}
+                      step={1}
+                      value={settings.fov}
+                      onChange={(e) => onUpdateSettings({ ...settings, fov: Number(e.target.value) })}
+                      className="accent-[#b89552]"
                     />
                   </div>
+
+                  <div className="flex items-center justify-between">
+                    <span>Camera Distance ({settings.cameraDistance.toFixed(1)}m)</span>
+                    <input
+                      type="range"
+                      min={2.4}
+                      max={5.0}
+                      step={0.1}
+                      value={settings.cameraDistance}
+                      onChange={(e) => onUpdateSettings({ ...settings, cameraDistance: Number(e.target.value) })}
+                      className="accent-[#b89552]"
+                    />
+                  </div>
+
+                  {(
+                    [
+                      ['masterVolume', 'Master Audio'],
+                      ['musicVolume', 'Music Score'],
+                      ['ambienceVolume', 'World Ambience'],
+                      ['sfxVolume', 'Combat & Foley'],
+                      ['dialogueVolume', 'Voices'],
+                    ] as const
+                  ).map(([prop, label]) => (
+                    <div key={prop} className="flex items-center justify-between">
+                      <span>{label} ({Math.round(settings[prop] * 100)}%)</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={settings[prop]}
+                        onChange={(e) => onUpdateSettings({ ...settings, [prop]: Number(e.target.value) })}
+                        className="accent-[#b89552]"
+                      />
+                    </div>
+                  ))}
 
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     {(
@@ -953,6 +963,7 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                         ['cameraShake', 'Camera Shake'],
                         ['reducedMotion', 'Reduced Motion'],
                         ['highContrastCues', 'High-Contrast Cues'],
+                        ['developerMode', 'Developer Mode'],
                       ] as const
                     ).map(([prop, label]) => (
                       <label key={prop} className="flex items-center gap-2 cursor-pointer">
@@ -960,7 +971,7 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                           type="checkbox"
                           checked={settings[prop]}
                           onChange={(e) => onUpdateSettings({ ...settings, [prop]: e.target.checked })}
-                          className="accent-[#9C7848]"
+                          className="accent-[#b89552]"
                         />
                         {label}
                       </label>
@@ -971,9 +982,9 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
 
               {/* Right: Remappable Controls & Developer-Only Blender Tools */}
               <div className="space-y-4">
-                <div className="border border-[#68717A]/45 bg-[#22272B] p-4 space-y-2 text-xs">
-                  <h4 className="text-sm uppercase tracking-widest text-[#9C7848]">Remappable Controls</h4>
-                  <p className="text-[11px] text-[#68717A]">Click any binding and press a new key (Esc cancels).</p>
+                <div className="eid-panel p-4 space-y-2 text-xs">
+                  <h4 className="font-display text-sm uppercase tracking-widest text-[#dfc38a]">Remappable Controls</h4>
+                  <p className="text-[11px] text-[#e4dcc8]/60">Click any binding and press a new key (Esc cancels).</p>
                   <div className="grid grid-cols-2 gap-1.5 pt-1">
                     {BINDING_LABELS.map((b) => (
                       <button
@@ -982,12 +993,12 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                         onClick={() => setListeningBind(b.key)}
                         className={`px-2.5 py-1.5 border text-left flex items-center justify-between ${
                           listeningBind === b.key
-                            ? 'border-[#6D9CB6] bg-[#6D9CB6]/20'
-                            : 'border-[#68717A]/40 bg-[#1B2024] hover:border-[#9C7848]'
+                            ? 'border-[#7fa8c4] bg-[#7fa8c4]/20'
+                            : 'border-[#b89552]/25 bg-[#0f141a] hover:border-[#dfc38a]'
                         }`}
                       >
                         <span>{b.label}</span>
-                        <span className="font-mono text-[10px] text-[#9C7848]">
+                        <span className="font-mono-num text-[10px] text-[#dfc38a]">
                           {listeningBind === b.key ? 'PRESS KEY...' : settings.bindings[b.key]}
                         </span>
                       </button>
@@ -995,20 +1006,22 @@ export const RpgMenus: React.FC<RpgMenusProps> = ({
                   </div>
                 </div>
 
-                {/* Developer-only Blender Asset Forge (isolated outside player menus) */}
-                <div className="border border-[#68717A]/40 bg-[#181D21] p-4 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest text-[#68717A]">Developer Tools</div>
-                    <div className="text-xs text-[#D9D1BE]">Blender 5.3 Live Bridge & 55-Asset Manifest</div>
+                {/* Developer-only Blender Asset Forge (strictly hidden unless Developer Mode enabled) */}
+                {settings.developerMode && (
+                  <div className="eid-panel p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-[#7fa8c4]">Developer Tools</div>
+                      <div className="text-xs text-[#efe4c8]">Blender 5.3 Live Bridge & Asset Forge</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onOpenDevBlender}
+                      className="eid-btn-ghost px-3 py-1.5 text-xs uppercase border-[#7fa8c4]/60 text-[#bdd8ea]"
+                    >
+                      Open Forge
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={onOpenDevBlender}
-                    className="px-3 py-1.5 text-xs uppercase border border-[#68717A] hover:border-[#6D9CB6] text-[#6D9CB6]"
-                  >
-                    Open Forge
-                  </button>
-                </div>
+                )}
               </div>
             </div>
           )}

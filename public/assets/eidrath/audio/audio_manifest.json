@@ -1,0 +1,86 @@
+{
+  "footsteps/snow": [
+    "/assets/eidrath/audio/footsteps/snow_1.mp3",
+    "/assets/eidrath/audio/footsteps/snow_2.mp3",
+    "/assets/eidrath/audio/footsteps/snow_3.mp3"
+  ],
+  "footsteps/stone": [
+    "/assets/eidrath/audio/footsteps/stone_1.mp3",
+    "/assets/eidrath/audio/footsteps/stone_2.mp3",
+    "/assets/eidrath/audio/footsteps/stone_3.mp3"
+  ],
+  "footsteps/wood": [
+    "/assets/eidrath/audio/footsteps/wood_1.mp3",
+    "/assets/eidrath/audio/footsteps/wood_2.mp3",
+    "/assets/eidrath/audio/footsteps/wood_3.mp3"
+  ],
+  "footsteps/water": [
+    "/assets/eidrath/audio/footsteps/water_1.mp3",
+    "/assets/eidrath/audio/footsteps/water_2.mp3",
+    "/assets/eidrath/audio/footsteps/water_3.mp3"
+  ],
+  "combat/swing": [
+    "/assets/eidrath/audio/combat/swing_1.mp3",
+    "/assets/eidrath/audio/combat/swing_2.mp3",
+    "/assets/eidrath/audio/combat/swing_3.mp3"
+  ],
+  "combat/unsheathe": [
+    "/assets/eidrath/audio/combat/unsheathe_1.mp3",
+    "/assets/eidrath/audio/combat/unsheathe_2.mp3"
+  ],
+  "combat/impact": [
+    "/assets/eidrath/audio/combat/impact_1.mp3",
+    "/assets/eidrath/audio/combat/impact_2.mp3",
+    "/assets/eidrath/audio/combat/impact_3.mp3"
+  ],
+  "combat/parry": [
+    "/assets/eidrath/audio/combat/parry_1.mp3",
+    "/assets/eidrath/audio/combat/parry_2.mp3"
+  ],
+  "combat/block": [
+    "/assets/eidrath/audio/combat/block_1.mp3",
+    "/assets/eidrath/audio/combat/block_2.mp3"
+  ],
+  "combat/spell": [
+    "/assets/eidrath/audio/combat/spell_1.mp3",
+    "/assets/eidrath/audio/combat/spell_2.mp3",
+    "/assets/eidrath/audio/combat/spell_3.mp3"
+  ],
+  "combat/roar": [
+    "/assets/eidrath/audio/combat/roar_1.mp3",
+    "/assets/eidrath/audio/combat/roar_2.mp3",
+    "/assets/eidrath/audio/combat/roar_3.mp3"
+  ],
+  "env/wind": [
+    "/assets/eidrath/audio/env/wind_1.mp3"
+  ],
+  "env/fire": [
+    "/assets/eidrath/audio/env/fire_1.mp3"
+  ],
+  "env/water": [
+    "/assets/eidrath/audio/env/water_1.mp3"
+  ],
+  "ui/click": [
+    "/assets/eidrath/audio/ui/click_1.mp3",
+    "/assets/eidrath/audio/ui/click_2.mp3",
+    "/assets/eidrath/audio/ui/click_3.mp3"
+  ],
+  "music/boss": [
+    "/assets/eidrath/audio/music/music_boss.mp3"
+  ],
+  "music/combat": [
+    "/assets/eidrath/audio/music/music_combat.mp3"
+  ],
+  "music/explore": [
+    "/assets/eidrath/audio/music/music_explore.mp3"
+  ],
+  "music/menu": [
+    "/assets/eidrath/audio/music/music_menu.mp3"
+  ],
+  "music/tomb": [
+    "/assets/eidrath/audio/music/music_tomb.mp3"
+  ],
+  "music/village": [
+    "/assets/eidrath/audio/music/music_village.mp3"
+  ]
+}

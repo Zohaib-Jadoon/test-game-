@@ -151,6 +151,30 @@ export function getTerrainSlopeDeg(x: number, z: number): number {
   return (Math.acos(Math.max(-1, Math.min(1, n.y))) * 180) / Math.PI;
 }
 
+export type SurfaceKind = 'snow' | 'stone' | 'wood' | 'water';
+
+export function getSurfaceKindAt(x: number, z: number): SurfaceKind {
+  const y = getTerrainHeight(x, z);
+  if (y <= FROZEN_LAKE_Y + 0.16 && Math.hypot(x - 96, z + 58) < 34) {
+    return 'water';
+  }
+  // Timber bridge deck on Ashen Span Bridge
+  if (Math.hypot(x + 72, z - 92) < 6.5) {
+    return 'wood';
+  }
+  // Stone architecture & village/keep flagstones
+  if (
+    Math.hypot(x + 145, z - 145) < 10 || // Oathgrave Tomb floor
+    Math.hypot(x + 10, z - 36) < 20 || // Ravenhold cobbles
+    Math.hypot(x - 6, z + 146) < 26 || // Warden Keep courtyard
+    Math.hypot(x - 6, z + 112) < 9 ||
+    getTerrainSlopeDeg(x, z) > 25
+  ) {
+    return 'stone';
+  }
+  return 'snow';
+}
+
 export function isInsidePlayableBounds(x: number, z: number): boolean {
   return Math.hypot(x, z) <= PLAYABLE_BOUND_RADIUS;
 }
@@ -177,9 +201,11 @@ export function getActiveChunkKeys(x: number, z: number, radiusChunks = 1): stri
   return keys;
 }
 
-export function createFrostheimTerrainMesh(segments = 140): {
+export function createFrostheimTerrainMesh(segments = 180): {
   terrain: THREE.Mesh;
   frozenLake: THREE.Mesh;
+  horizons: THREE.Mesh;
+  updateWater: (elapsedSec: number) => void;
 } {
   const geo = new THREE.PlaneGeometry(FROSTHEIM_WORLD_SIZE, FROSTHEIM_WORLD_SIZE, segments, segments);
   geo.rotateX(-Math.PI / 2);
@@ -187,11 +213,12 @@ export function createFrostheimTerrainMesh(segments = 140): {
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
 
-  const snowCol = new THREE.Color('#B8C3CC');
-  const slateCol = new THREE.Color('#3B434B');
-  const roadCol = new THREE.Color('#5A554E');
-  const iceCol = new THREE.Color('#7EA4B8');
-  const mossCol = new THREE.Color('#38463E');
+  const snowCol = new THREE.Color('#B5C2CD');
+  const slateCol = new THREE.Color('#424A53');
+  const roadCol = new THREE.Color('#5A5349');
+  const cobbleCol = new THREE.Color('#535962');
+  const iceCol = new THREE.Color('#7CA0B5');
+  const mossCol = new THREE.Color('#3C4A40');
   const tmp = new THREE.Color();
 
   for (let i = 0; i < pos.count; i++) {
@@ -203,17 +230,22 @@ export function createFrostheimTerrainMesh(segments = 140): {
     const slope = getTerrainSlopeDeg(x, z);
     const road = getRoadMask(x, z);
     const isIce = y <= FROZEN_LAKE_Y + 0.08;
+    const villageDist = Math.hypot(x + 10, z - 36);
+    const keepDist = Math.hypot(x - 6, z + 146);
 
     if (isIce) {
       tmp.copy(iceCol);
     } else {
-      const rockBlend = smoothstep(20, 38, slope);
-      const forestPatch = smoothstep(0.15, 0.75, Math.sin(x * 0.04) * Math.cos(z * 0.04));
-      tmp.copy(snowCol).lerp(mossCol, forestPatch * 0.16).lerp(slateCol, rockBlend);
+      const rockBlend = smoothstep(18, 35, slope);
+      const forestPatch = smoothstep(0.12, 0.72, Math.sin(x * 0.04) * Math.cos(z * 0.04));
+      tmp.copy(snowCol).lerp(mossCol, forestPatch * 0.14).lerp(slateCol, rockBlend);
       if (road > 0.02) {
-        tmp.lerp(roadCol, road * 0.72);
+        tmp.lerp(roadCol, road * 0.78);
       }
-      // Subtle elevation frost tint on peaks
+      if (villageDist < 22 || keepDist < 25) {
+        const w = Math.max(1 - smoothstep(14, 22, villageDist), 1 - smoothstep(18, 25, keepDist));
+        tmp.lerp(cobbleCol, w * 0.85);
+      }
       if (y > 14) {
         tmp.lerp(snowCol, smoothstep(14, 28, y) * 0.45);
       }
@@ -227,8 +259,33 @@ export function createFrostheimTerrainMesh(segments = 140): {
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
 
+  // Load real PolyHaven CC0 1K snow PBR maps (diffuse, GL normal, roughness) tiled seamlessly over Frostheim
+  const texLoader = typeof THREE.TextureLoader !== 'undefined' && typeof document !== 'undefined' ? new THREE.TextureLoader() : null;
+  let snowDiff: THREE.Texture | null = null;
+  let snowNor: THREE.Texture | null = null;
+  let snowRough: THREE.Texture | null = null;
+  let iceNor: THREE.Texture | null = null;
+  if (texLoader) {
+    const prep = (url: string, rep: number, srgb: boolean) => {
+      const t = texLoader.load(url);
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    snowDiff = prep('/assets/eidrath/textures/snow_field_aerial/diff.jpg', 54, true);
+    snowNor = prep('/assets/eidrath/textures/snow_01/nor_gl.jpg', 64, false);
+    snowRough = prep('/assets/eidrath/textures/snow_01/rough.jpg', 64, false);
+    iceNor = prep('/assets/eidrath/textures/ice_003/nor_gl.jpg', 12, false);
+  }
+
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
+    map: snowDiff ?? undefined,
+    normalMap: snowNor ?? undefined,
+    normalScale: new THREE.Vector2(0.85, 0.85),
+    roughnessMap: snowRough ?? undefined,
     roughness: 0.88,
     metalness: 0.04,
   });
@@ -237,19 +294,53 @@ export function createFrostheimTerrainMesh(segments = 140): {
   terrain.name = 'TERRAIN_Frostheim';
   terrain.receiveShadow = true;
 
-  const lakeGeo = new THREE.CircleGeometry(30, 32);
+  // Normal-mapped animated Frozen Reach lake + glacial shimmer
+  const lakeGeo = new THREE.CircleGeometry(32, 48);
   lakeGeo.rotateX(-Math.PI / 2);
   const lakeMat = new THREE.MeshStandardMaterial({
-    color: '#7EA5BA',
-    roughness: 0.18,
-    metalness: 0.22,
+    color: '#6C92A8',
+    normalMap: iceNor ?? undefined,
+    normalScale: new THREE.Vector2(0.55, 0.55),
+    roughness: 0.14,
+    metalness: 0.28,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.92,
   });
   const frozenLake = new THREE.Mesh(lakeGeo, lakeMat);
   frozenLake.name = 'TERRAIN_FrozenReachLake';
   frozenLake.position.set(96, FROZEN_LAKE_Y + 0.03, -58);
   frozenLake.receiveShadow = true;
 
-  return { terrain, frozenLake };
+  // Jagged alpine Frostheim horizon silhouettes around playable bowl
+  const rimGeo = new THREE.CylinderGeometry(285, 315, 76, 48, 4, true);
+  const rPos = rimGeo.attributes.position;
+  for (let i = 0; i < rPos.count; i++) {
+    const x = rPos.getX(i);
+    const y = rPos.getY(i);
+    const z = rPos.getZ(i);
+    if (y > 0) {
+      const ang = Math.atan2(z, x);
+      const ridge = Math.abs(Math.sin(ang * 7.0)) * 34 + Math.abs(Math.cos(ang * 13.0)) * 18;
+      rPos.setY(i, 12 + ridge);
+    } else {
+      rPos.setY(i, -12);
+    }
+  }
+  rimGeo.computeVertexNormals();
+  const rimMat = new THREE.MeshStandardMaterial({
+    color: '#34414e',
+    roughness: 0.94,
+    metalness: 0.02,
+    side: THREE.BackSide,
+  });
+  const horizons = new THREE.Mesh(rimGeo, rimMat);
+  horizons.name = 'TERRAIN_AlpineHorizon';
+
+  const updateWater = (elapsedSec: number) => {
+    if (iceNor) {
+      iceNor.offset.set(elapsedSec * 0.012, Math.sin(elapsedSec * 0.15) * 0.015);
+    }
+  };
+
+  return { terrain, frozenLake, horizons, updateWater };
 }

@@ -2,7 +2,11 @@ node_modules/
 build/
 dist/
 coverage/
+_asset_cache/
 .DS_Store
 *.log
 .env*
 !.env.example
+__pycache__/
+*.pyc
+*.blend1

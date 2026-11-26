@@ -8,14 +8,20 @@ import {
   FROSTHEIM_LANDMARKS,
   validateEidrathContent,
 } from '../content/eidrathContent';
-import { EIDRATH_ASSET_MANIFEST, listManifestAssets } from './assets/manifest';
+import { EIDRATH_ASSET_MANIFEST, isAssetVisualQaApproved, listManifestAssets } from './assets/manifest';
 import {
   advanceCombatTimeline,
   canRegisterHitOnTarget,
+  classifyHitDirection,
+  computeChargedAttackMultiplier,
   computeDamageAmount,
+  consumeBufferedInput,
+  createCombatInputBuffer,
   createCombatTimeline,
   getMountainWardenDamageTakenMultiplier,
   getMountainWardenPhase,
+  getWeaponMovesetTiming,
+  queueCombatInput,
   resolveDefenderHit,
   startAttackAction,
   startDodgeAction,
@@ -35,6 +41,7 @@ import {
   unlockSkillNode,
 } from './rpg/rpgLogic';
 import {
+  createDefaultSettings,
   createNewGameSave,
   readSaveSlot,
   validateSaveGame,
@@ -42,6 +49,7 @@ import {
 } from './save/saveSystem';
 import {
   getActiveChunkKeys,
+  getSurfaceKindAt,
   getTerrainHeight,
   getTerrainSlopeDeg,
   isInsidePlayableBounds,
@@ -268,7 +276,7 @@ test('QA-08: All 55 Blender 5.3 .glb runtime assets exist with valid glTF v2 hea
     const check = validateGlbHeader(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
     assert.equal(check.valid, true, `Invalid GLB header on ${asset.id}: ${check.reason}`);
   }
-  assert.ok(totalBytes < 30 * 1024 * 1024, 'Initial Frostheim asset footprint stays under 30MB target');
+  assert.ok(totalBytes < 60 * 1024 * 1024, 'Initial Frostheim realistic PBR asset footprint stays under 60MB target');
 
   // Verify invalid GLB binary is explicitly rejected
   const corrupt = new TextEncoder().encode('NOT_A_VALID_GLB_BINARY_PAYLOAD');
@@ -302,4 +310,57 @@ test('QA-09: Versioned SaveGame v1 persistence, corrupt backup recovery, and leg
 
   // Invalid schema version rejected
   assert.equal(validateSaveGame({ schemaVersion: 999 }).valid, false);
+});
+
+test('QA-10: Overhaul combat input buffering, weapon timing weights, directional hits & surface classification', () => {
+  // 240ms combat input buffer
+  const buf = createCombatInputBuffer();
+  queueCombatInput(buf, 'light_attack', 1000, 240);
+  assert.equal(consumeBufferedInput(buf, 1180), 'light_attack');
+  assert.equal(consumeBufferedInput(buf, 1190), null, 'Buffer must consume once');
+
+  queueCombatInput(buf, 'dodge', 2000, 200);
+  assert.equal(consumeBufferedInput(buf, 2300), null, 'Expired buffer must return null');
+
+  // Heavy weapons feel heavier than daggers/swords
+  const dagger = getWeaponMovesetTiming('wpn_nightpiercer');
+  const hammer = getWeaponMovesetTiming('wpn_worldshatter');
+  assert.ok(dagger.windupMult < 1.0 && hammer.windupMult > 1.2);
+  assert.ok(hammer.poiseMult > dagger.poiseMult);
+
+  // Charged heavy scaling
+  const uncharged = computeChargedAttackMultiplier(0);
+  const fullCharge = computeChargedAttackMultiplier(0.9);
+  assert.equal(uncharged.isFullyCharged, false);
+  assert.equal(fullCharge.isFullyCharged, true);
+  assert.ok(fullCharge.damageMult >= 1.8);
+
+  // Directional hit reaction classification
+  assert.equal(classifyHitDirection({ x: 0, z: 5 }, { x: 0, z: 0 }, 0), 'front');
+  assert.equal(classifyHitDirection({ x: 0, z: -5 }, { x: 0, z: 0 }, 0), 'back');
+  assert.equal(classifyHitDirection({ x: 5, z: 0 }, { x: 0, z: 0 }, 0), 'right');
+  assert.equal(classifyHitDirection({ x: -5, z: 0 }, { x: 0, z: 0 }, 0), 'left');
+
+  // Surface material detection for footstep Foley audio
+  assert.equal(getSurfaceKindAt(-10, 36), 'stone');
+  assert.equal(getSurfaceKindAt(-72, 92), 'wood');
+  assert.equal(getSurfaceKindAt(96, -58), 'water');
+  assert.equal(getSurfaceKindAt(40, 60), 'snow');
+
+  // Default Settings contract & Visual QA Gate helper
+  const defs = createDefaultSettings();
+  assert.equal(defs.developerMode, false);
+  assert.equal(defs.fov, 56);
+  assert.equal(defs.cameraDistance, 3.4);
+  assert.equal(isAssetVisualQaApproved({ ...EIDRATH_ASSET_MANIFEST.chr_kaelen, inspectedInGame: false }), false);
+  assert.equal(
+    isAssetVisualQaApproved({
+      ...EIDRATH_ASSET_MANIFEST.chr_kaelen,
+      integrationStatus: 'integrated',
+      status: 'approved',
+      visualQaStatus: 'approved',
+      inspectedInGame: true,
+    }),
+    true,
+  );
 });

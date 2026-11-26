@@ -8,8 +8,11 @@ export type AssetCategory =
   | 'world'
   | 'prop';
 
+export type VisualQaStatus = 'pending' | 'blender_qa' | 'approved' | 'rejected';
+
 export interface AssetDefinition {
   id: string;
+  name: string;
   meshName: string;
   category: AssetCategory;
   url: string;
@@ -20,6 +23,19 @@ export interface AssetDefinition {
   sockets?: string[];
   hasCollider?: boolean;
   provenance: string;
+  creator: string;
+  sourceUrl: string;
+  license: string;
+  attribution: string;
+  commercialUse: boolean;
+  redistribution: string;
+  originalFormat: string;
+  optimizedFormat: string;
+  triangleCount: number;
+  textureSizes: string;
+  integrationStatus: 'pending' | 'integrated' | 'replaced';
+  visualQaStatus: VisualQaStatus;
+  inspectedInGame: boolean;
   status: 'approved' | 'pending';
 }
 
@@ -311,7 +327,7 @@ export interface LandmarkDef {
 }
 
 export type DifficultyId = 'story' | 'normal' | 'hard' | 'oathsworn';
-export type QualityPreset = 'low' | 'medium' | 'high';
+export type QualityPreset = 'low' | 'medium' | 'high' | 'ultra';
 export type CompanionCommand = 'assist' | 'attack' | 'regroup' | 'wait';
 
 export interface KeyBindings {
@@ -337,7 +353,14 @@ export interface GameSettings {
   reducedMotion: boolean;
   highContrastCues: boolean;
   mouseSensitivity: number;
+  fov: number;
+  cameraDistance: number;
+  developerMode: boolean;
   masterVolume: number;
+  musicVolume: number;
+  ambienceVolume: number;
+  sfxVolume: number;
+  dialogueVolume: number;
   muted: boolean;
   bindings: KeyBindings;
 }

@@ -1,0 +1,18 @@
+---
+description: Universal Software Factory core quality, context-sensitive pstack/Ponytail discipline, and release gates
+globs:
+alwaysApply: true
+---
+
+# Universal Software Factory — Global Policy (Cursor IDE)
+
+1. Preserve existing code, schemas, rules, skills, memories, and data. Inspect before editing.
+2. Activate only relevant specialists and skills; load detailed references on demand to protect context budget.
+3. Context-sensitive discipline:
+   - `FAST`: `pstack` root-cause clarity + `Ponytail lite` minimal edit.
+   - `STANDARD`: `pstack` data-shape-first + `Ponytail full` ladder (YAGNI, reuse existing helpers, stdlib-first).
+   - `DEEP` / `RELEASE`: full `pstack` rigor + `Ponytail full` + independent review.
+4. Track tasks and gates via `factory` CLI (`factory init .`, `factory plan .`, `factory verify .`, `factory review .`, `factory release .`).
+5. Never fabricate test passes; mark missing runtimes or skipped checks `NOT VERIFIED` or `BLOCKED`.
+6. Protect secrets, PII, and biometric records; never store them in source, logs, or memory.
+7. Never close or restart Cursor or Antigravity IDE. Never push, deploy, run destructive DB migrations, or sign/publish apps without explicit human approval.

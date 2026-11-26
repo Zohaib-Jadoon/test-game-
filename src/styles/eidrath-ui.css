@@ -1,0 +1,90 @@
+/* EIDRATH: The Last Oath — Dark-Nordic Engraved Iron & Gilded Slate Design System */
+
+:root {
+  --eid-iron-950: #0c0f13;
+  --eid-iron-900: #131820;
+  --eid-iron-850: #1a212b;
+  --eid-iron-800: #232c38;
+  --eid-gold-500: #b89552;
+  --eid-gold-300: #dfc38a;
+  --eid-frost-400: #7fa8c4;
+  --eid-frost-200: #bdd8ea;
+  --eid-parchment: #e4dcc8;
+  --eid-crimson: #8f2d29;
+  --eid-emerald: #3a7554;
+}
+
+.eid-panel {
+  position: relative;
+  background: linear-gradient(165deg, rgba(19, 24, 32, 0.94), rgba(11, 14, 19, 0.96));
+  border: 1px solid rgba(184, 149, 82, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(223, 195, 138, 0.14),
+    inset 0 0 28px rgba(0, 0, 0, 0.65),
+    0 20px 55px rgba(0, 0, 0, 0.72);
+}
+
+.eid-panel::before,
+.eid-panel::after {
+  content: '';
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(223, 195, 138, 0.55);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.eid-panel::before {
+  top: -5px;
+  left: -5px;
+  background: #131820;
+}
+
+.eid-panel::after {
+  bottom: -5px;
+  right: -5px;
+  background: #131820;
+}
+
+.eid-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(184, 149, 82, 0.58), transparent);
+}
+
+.eid-btn-primary {
+  background: linear-gradient(180deg, rgba(54, 42, 24, 0.92), rgba(29, 23, 15, 0.96));
+  border: 1px solid rgba(212, 178, 112, 0.56);
+  color: #efe4c8;
+  transition: border-color 150ms ease, background 150ms ease, transform 120ms ease;
+}
+
+.eid-btn-primary:hover {
+  border-color: rgba(240, 214, 158, 0.92);
+  background: linear-gradient(180deg, rgba(72, 56, 31, 0.96), rgba(38, 30, 19, 0.98));
+}
+
+.eid-btn-ghost {
+  background: rgba(16, 21, 28, 0.72);
+  border: 1px solid rgba(184, 149, 82, 0.24);
+  color: rgba(228, 220, 200, 0.86);
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+}
+
+.eid-btn-ghost:hover {
+  border-color: rgba(184, 149, 82, 0.62);
+  color: #f3ead3;
+  background: rgba(26, 33, 43, 0.88);
+}
+
+.eid-meter-track {
+  position: relative;
+  background: linear-gradient(180deg, #0b0e12, #141921);
+  border: 1px solid rgba(184, 149, 82, 0.36);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85);
+}
+
+.eid-ornate-vignette {
+  background: radial-gradient(ellipse at center, transparent 54%, rgba(6, 9, 13, 0.58) 100%);
+}
+

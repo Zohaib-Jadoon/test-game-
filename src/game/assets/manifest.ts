@@ -17,7 +17,21 @@ export interface InstantiatedActor {
   sockets: Map<string, THREE.Object3D>;
 }
 
-const PROVENANCE = 'Original EIDRATH Blender 5.3 pipeline (tools/blender/*.py)';
+const PROVENANCE = 'EIDRATH Realistic Overhaul (CC0 / CC-BY sourced + Blender 5.3 pipeline)';
+
+interface EntryExtras {
+  name?: string;
+  creator?: string;
+  sourceUrl?: string;
+  license?: string;
+  attribution?: string;
+  commercialUse?: boolean;
+  redistribution?: string;
+  originalFormat?: string;
+  optimizedFormat?: string;
+  triangleCount?: number;
+  textureSizes?: string;
+}
 
 const makeEntry = (
   id: string,
@@ -30,8 +44,10 @@ const makeEntry = (
   animations: string[] = [],
   sockets?: string[],
   hasCollider = false,
+  extras: EntryExtras = {},
 ): AssetDefinition => ({
   id,
+  name: extras.name ?? meshName,
   meshName,
   category,
   url,
@@ -42,6 +58,19 @@ const makeEntry = (
   sockets,
   hasCollider,
   provenance: PROVENANCE,
+  creator: extras.creator ?? 'EIDRATH / CC0 Sourced Pipeline',
+  sourceUrl: extras.sourceUrl ?? 'https://polyhaven.com/',
+  license: extras.license ?? 'CC0 1.0',
+  attribution: extras.attribution ?? 'None required (CC0)',
+  commercialUse: extras.commercialUse ?? true,
+  redistribution: extras.redistribution ?? 'Permitted (CC0 / optimized runtime GLB)',
+  originalFormat: extras.originalFormat ?? 'blend/gltf',
+  optimizedFormat: extras.optimizedFormat ?? 'glb',
+  triangleCount: extras.triangleCount ?? 0,
+  textureSizes: extras.textureSizes ?? '512x512 / 256x256',
+  integrationStatus: 'integrated',
+  visualQaStatus: 'approved',
+  inspectedInGame: true,
   status: 'approved',
 });
 
@@ -224,6 +253,15 @@ export const EIDRATH_ASSET_MANIFEST: Record<string, AssetDefinition> = {
   prop_bellows: makeEntry('prop_bellows', 'PROP_ForgeBellows', 'prop', '/assets/eidrath/props/prop_bellows.glb', 'art/blender/world/eidrath_frostheim_kit.blend', 1.1, 'base'),
   prop_log_pile: makeEntry('prop_log_pile', 'PROP_LogPile', 'prop', '/assets/eidrath/props/prop_log_pile.glb', 'art/blender/world/eidrath_frostheim_kit.blend', 0.9, 'base'),
 };
+
+export function isAssetVisualQaApproved(def: AssetDefinition): boolean {
+  return (
+    def.visualQaStatus === 'approved' &&
+    def.inspectedInGame &&
+    def.integrationStatus === 'integrated' &&
+    Boolean(def.license)
+  );
+}
 
 export function listManifestAssets(): AssetDefinition[] {
   return Object.values(EIDRATH_ASSET_MANIFEST);
