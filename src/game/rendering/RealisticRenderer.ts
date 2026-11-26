@@ -68,7 +68,10 @@ export class RealisticRenderer {
   private bloomPass: UnrealBloomPass | null = null;
   private gradePass: ShaderPass | null = null;
   private pmrem: THREE.PMREMGenerator;
-  private hdriCache = new Map<HdriKey, THREE.Texture>();
+  private hdriCache = new Map<HdriKey, THREE.WebGLRenderTarget>();
+  private skyCache = new Map<HdriKey, THREE.Texture>();
+  private pendingHdri = new Set<HdriKey>();
+  private retryHdriAfter = new Map<HdriKey, number>();
   private activeHdri: HdriKey | null = null;
   private preset: QualityPreset = 'high';
   private disposed = false;
@@ -175,38 +178,72 @@ export class RealisticRenderer {
     }
   }
 
+  private getSky(key: HdriKey): THREE.Texture | THREE.Color {
+    const cached = this.skyCache.get(key);
+    if (cached) return cached;
+    // The visible winter sky is separate from the photographed HDRI used for reflections.
+    const palettes: Record<HdriKey, [string, string, string]> = {
+      snowy_forest: ['#72889f', '#b6c1c8', '#647482'],
+      snowy_hillside: ['#7790a6', '#bdc9d1', '#73828e'],
+      winter_evening: ['#273b59', '#8494aa', '#344252'],
+      forest_cave: ['#202b3a', '#566777', '#222b36'],
+    };
+    const [top, horizon, bottom] = palettes[key];
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return new THREE.Color(horizon);
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, top);
+    gradient.addColorStop(0.48, horizon);
+    gradient.addColorStop(0.56, horizon);
+    gradient.addColorStop(1, bottom);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const sky = new THREE.CanvasTexture(canvas);
+    sky.mapping = THREE.EquirectangularReflectionMapping;
+    sky.colorSpace = THREE.SRGBColorSpace;
+    this.skyCache.set(key, sky);
+    return sky;
+  }
+
   public setHdri(key: HdriKey): void {
-    if (this.activeHdri === key) return;
-    this.activeHdri = key;
+    if (this.disposed) return;
+    if (this.activeHdri !== key) {
+      this.activeHdri = key;
+      this.scene.background = this.getSky(key);
+      this.scene.backgroundBlurriness = 0;
+      this.scene.backgroundIntensity = 1;
+    }
     const cached = this.hdriCache.get(key);
     if (cached) {
-      this.scene.environment = cached;
-      this.scene.background = cached;
-      this.scene.backgroundBlurriness = 0.04;
-      this.scene.backgroundIntensity = key === 'forest_cave' ? 0.35 : 0.72;
+      if (this.scene.environment !== cached.texture) this.scene.environment = cached.texture;
       return;
     }
+    if (this.pendingHdri.has(key) || Date.now() < (this.retryHdriAfter.get(key) ?? 0)) return;
+    this.pendingHdri.add(key);
     const loader = new RGBELoader();
     loader.load(
       `/assets/eidrath/hdri/${key}.hdr`,
       (hdr) => {
-        if (this.disposed) {
+        this.pendingHdri.delete(key);
+        if (this.disposed) { hdr.dispose(); return; }
+        try {
+          const target = this.pmrem.fromEquirectangular(hdr);
+          this.hdriCache.set(key, target);
+          this.retryHdriAfter.delete(key);
+          if (this.activeHdri === key) this.scene.environment = target.texture;
+        } catch {
+          this.retryHdriAfter.set(key, Date.now() + 15000);
+        } finally {
           hdr.dispose();
-          return;
-        }
-        const envTex = this.pmrem.fromEquirectangular(hdr).texture;
-        hdr.dispose();
-        this.hdriCache.set(key, envTex);
-        if (this.activeHdri === key) {
-          this.scene.environment = envTex;
-          this.scene.background = envTex;
-          this.scene.backgroundBlurriness = 0.04;
-          this.scene.backgroundIntensity = key === 'forest_cave' ? 0.35 : 0.72;
         }
       },
       undefined,
       () => {
-        // Fallback gradient background remains intact if HDRI request fails offline
+        this.pendingHdri.delete(key);
+        this.retryHdriAfter.set(key, Date.now() + 15000);
       },
     );
   }
@@ -267,10 +304,14 @@ export class RealisticRenderer {
 
   public dispose(): void {
     this.disposed = true;
-    for (const tex of this.hdriCache.values()) {
-      tex.dispose();
-    }
+    this.scene.environment = null;
+    this.scene.background = null;
+    for (const target of this.hdriCache.values()) target.dispose();
+    for (const texture of this.skyCache.values()) texture.dispose();
     this.hdriCache.clear();
+    this.skyCache.clear();
+    this.pendingHdri.clear();
+    this.retryHdriAfter.clear();
     this.pmrem.dispose();
     this.composer?.dispose();
     this.renderer.dispose();

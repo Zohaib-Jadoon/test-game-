@@ -25,6 +25,7 @@ export interface ActiveCombatAction {
   attack: AttackDefinition;
   elapsedMs: number;
   alreadyHitIds: Set<string>;
+  releaseConsumed?: boolean;
 }
 
 export interface CombatActorTimeline {
@@ -157,6 +158,14 @@ export function advanceCombatTimeline(timeline: CombatActorTimeline, dtMs: numbe
       timeline.state = 'idle';
     }
   }
+}
+
+/** Consume the attack release exactly once, after windup; cancellation before active releases nothing. */
+export function consumeAttackRelease(timeline: CombatActorTimeline): AttackDefinition | null {
+  const action = timeline.activeAction;
+  if (timeline.state !== 'active' || !action || action.releaseConsumed) return null;
+  action.releaseConsumed = true;
+  return action.attack;
 }
 
 export function canRegisterHitOnTarget(action: ActiveCombatAction | null, targetId: string): boolean {

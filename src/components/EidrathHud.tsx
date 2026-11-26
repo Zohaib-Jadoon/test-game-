@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { CompanionCommand, GameSettings, HudSnapshot } from '../game/types';
 
 interface EidrathHudProps {
@@ -52,6 +52,13 @@ export const EidrathHud: React.FC<EidrathHudProps> = ({
   const joyRef = useRef<HTMLDivElement | null>(null);
   const joyTouchId = useRef<number | null>(null);
   const lookTouchRef = useRef<{ id: number; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (hud.mode !== 'playing' || !showTouchPad) {
+      joyTouchId.current = null;
+      lookTouchRef.current = null;
+    }
+  }, [hud.mode, showTouchPad]);
 
   const cardinals: Array<{ label: string; angle: number }> = [
     { label: 'N', angle: 0 },

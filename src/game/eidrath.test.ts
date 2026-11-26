@@ -19,6 +19,7 @@ import {
   computeChargedAttackMultiplier,
   computeDamageAmount,
   consumeBufferedInput,
+  consumeAttackRelease,
   createCombatInputBuffer,
   createCombatTimeline,
   getMountainWardenDamageTakenMultiplier,
@@ -448,6 +449,23 @@ test('Cowork: camera pulls in immediately when a wall intersects the actual shou
   (wall.material as THREE.Material).dispose();
 });
 
-test('Cowork: imported runtime assets are not visually approved by default', () => {
-  assert.ok(listManifestAssets().every((asset) => !isAssetVisualQaApproved(asset)));
+test('Cowork: asset status cannot be approved without the in-game review flag', () => {
+  for (const asset of listManifestAssets()) {
+    assert.equal(isAssetVisualQaApproved({ ...asset, inspectedInGame: false }), false);
+    if (asset.visualQaStatus === 'pending') assert.equal(asset.status, 'pending');
+  }
+});
+
+test('Cowork: projectiles and swing sounds release only once in the active phase', () => {
+  const timeline = createCombatTimeline();
+  const bow = ATTACKS.bow_shot;
+  assert.equal(startAttackAction(timeline, 'bow_shot', 100, 100).started, true);
+  assert.equal(consumeAttackRelease(timeline), null);
+  for (let t = 0; t < bow.windupMs; t += 10) advanceCombatTimeline(timeline, Math.min(10, bow.windupMs - t));
+  assert.equal(consumeAttackRelease(timeline)?.id, 'bow_shot');
+  assert.equal(consumeAttackRelease(timeline), null);
+  const cancelled = createCombatTimeline();
+  startAttackAction(cancelled, 'bow_shot', 100, 100);
+  startDodgeAction(cancelled, 100);
+  assert.equal(consumeAttackRelease(cancelled), null);
 });

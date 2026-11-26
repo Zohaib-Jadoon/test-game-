@@ -237,7 +237,8 @@ export class CinematicCamera {
     const direction = segment.multiplyScalar(1 / distance);
     this.raycaster.set(pivot, direction);
     this.raycaster.near = 0.02;
-    this.raycaster.far = distance;
+    // Include clearance beyond the proposed camera so pull-in does not oscillate at a wall.
+    this.raycaster.far = distance + 0.30;
     for (const hit of this.raycaster.intersectObjects(collisionMeshes, true)) {
       // Raycaster does not automatically skip invisible parent groups.
       let node: THREE.Object3D | null = hit.object;
@@ -247,7 +248,7 @@ export class CinematicCamera {
         node = node.parent;
       }
       if (skip) continue;
-      pos.copy(pivot).addScaledVector(direction, Math.max(0.02, hit.distance - 0.30));
+      pos.copy(pivot).addScaledVector(direction, Math.min(distance, Math.max(0.02, hit.distance - 0.30)));
       break;
     }
   }

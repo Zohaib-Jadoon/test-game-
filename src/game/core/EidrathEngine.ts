@@ -22,6 +22,7 @@ import { createSoftSnowSpriteTexture, RealisticRenderer } from '../rendering/Rea
 import {
   advanceCombatTimeline,
   canRegisterHitOnTarget,
+  consumeAttackRelease,
   classifyHitDirection,
   computeChargedAttackMultiplier,
   computeDamageAmount,
@@ -1213,8 +1214,8 @@ export class EidrathEngine {
     }
 
     for (const inter of this.interactables) {
-      if (inter.kind === 'chest' && this.save.world.openedChests.includes(inter.id)) {
-        inter.enabled = false;
+      if (inter.kind === 'chest') {
+        inter.enabled = !this.save.world.openedChests.includes(inter.id);
       }
     }
 
@@ -1648,6 +1649,7 @@ export class EidrathEngine {
   }
 
   public fastTravelTo(landmarkId: string): { ok: boolean; message: string } {
+    if (this.isInCombat()) return { ok: false, message: 'Cannot fast travel while enemies are engaging you.' };
     const lm = FROSTHEIM_LANDMARKS.find((l) => l.id === landmarkId);
     if (!lm) return { ok: false, message: 'Unknown destination.' };
     if (!this.save.world.discoveredLandmarks.includes(lm.id)) {
@@ -1659,6 +1661,10 @@ export class EidrathEngine {
     this.save.player.x = tx;
     this.save.player.z = tz;
     this.save.player.y = getTerrainHeight(tx, tz);
+    this.clearHeldInput();
+    this.playerVelX = this.playerVelY = this.playerVelZ = 0;
+    this.playerGrounded = true;
+    this.cinematicCamera.resetPose();
     if (this.kaelen) {
       this.kaelen.root.position.set(tx, this.save.player.y, tz);
     }
@@ -1833,11 +1839,7 @@ export class EidrathEngine {
     this.faceLockOrCamera();
     this.combatVfx.clearWeaponTrail();
     this.setKaelenClip(res.attack.animation, false, 1 / timing.windupMult, true);
-    this.audio.playSlash(timing.weightClass === 'heavy');
-
-    if (res.attack.hitShape === 'projectile') {
-      this.spawnPlayerProjectile(res.attack, 0xd9d1be, 32);
-    }
+    // Release sounds and projectiles are emitted only when the action enters its active window.
   }
 
   private tryPlayerHeavyAttack(chargeSec = 0): void {
@@ -1870,7 +1872,6 @@ export class EidrathEngine {
     this.faceLockOrCamera();
     this.combatVfx.clearWeaponTrail();
     this.setKaelenClip('HeavyAttack', false, 1 / timing.windupMult, true);
-    this.audio.playSlash(true);
     if (charged.isFullyCharged) {
       this.cinematicCamera.triggerZoomPulse(-3.2);
     }
@@ -1922,18 +1923,27 @@ export class EidrathEngine {
     this.faceLockOrCamera();
     this.setKaelenClip('Cast', false, 1, true);
 
+  }
+
+  private releasePlayerAttack(attack: typeof ATTACKS[string]): void {
     const origin = new THREE.Vector3(this.save.player.x, this.save.player.y + 1.15, this.save.player.z);
-    if (abilityId === 'ability_frost_lance') {
+    if (attack.id === 'bow_shot') {
+      this.audio.playSlash(false);
+      this.spawnPlayerProjectile(attack, 0xd9d1be, 32);
+    } else if (attack.id === 'ability_frost_lance') {
       this.audio.playSpell('frost');
       this.combatVfx.spawnImpactSparks(origin, 'frost');
-      this.spawnPlayerProjectile(res.attack, 0x6d9cb6, 28);
-    } else if (abilityId === 'ability_hearth_flame') {
+      this.spawnPlayerProjectile(attack, 0x6d9cb6, 28);
+    } else if (attack.id === 'ability_hearth_flame') {
       this.audio.playSpell('fire');
       this.combatVfx.spawnImpactSparks(origin, 'fire');
-    } else {
+    } else if (attack.id === 'ability_oath_wave') {
       this.audio.playSpell('oath');
       this.combatVfx.spawnImpactSparks(origin, 'oath');
       this.triggerShake(0.28, 0.22);
+    } else {
+      const timing = getWeaponMovesetTiming(this.save.player.equipment.mainHand ?? '');
+      this.audio.playSlash(attack.id === 'heavy_1' || timing.weightClass === 'heavy');
     }
   }
 
@@ -2169,6 +2179,8 @@ export class EidrathEngine {
     }
 
     if (this.timeline.state === 'active' && this.timeline.activeAction) {
+      const release = consumeAttackRelease(this.timeline);
+      if (release) this.releasePlayerAttack(release);
       this.evaluatePlayerActiveHitbox();
       // Sample weapon socket position for realistic blade ribbon trail
       const handR = this.kaelen?.sockets.get('hand_r');

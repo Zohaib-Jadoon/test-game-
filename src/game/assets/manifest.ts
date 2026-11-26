@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import type { AssetCategory, AssetDefinition } from '../types';
+import type { AssetCategory, AssetDefinition, VisualQaStatus } from '../types';
+import manifestEvidence from '../../../ASSET_MANIFEST.json';
 
 export interface LoadedAssetRecord {
   definition: AssetDefinition;
@@ -31,6 +32,16 @@ interface EntryExtras {
   optimizedFormat?: string;
   triangleCount?: number;
   textureSizes?: string;
+}
+
+type QaRecord = { id: string; visualQaStatus: string; inspectedInGame: boolean; sha256?: string; visualQaEvidence?: { sha256?: string; reviewer?: string; evidence?: string; verdict?: string } | null };
+const qaRecords = new Map((manifestEvidence.assets as QaRecord[]).map((entry) => [entry.id, entry]));
+
+function reviewedStatus(id: string): VisualQaStatus {
+  const qa = qaRecords.get(id);
+  const evidence = qa?.visualQaEvidence;
+  if (!qa?.inspectedInGame || !qa.sha256 || evidence?.sha256 !== qa.sha256 || !evidence.reviewer || !evidence.evidence || evidence.verdict !== qa.visualQaStatus) return 'pending';
+  return qa.visualQaStatus === 'approved' || qa.visualQaStatus === 'rejected' ? qa.visualQaStatus : 'pending';
 }
 
 const makeEntry = (
@@ -69,9 +80,9 @@ const makeEntry = (
   triangleCount: extras.triangleCount ?? 0,
   textureSizes: extras.textureSizes ?? '512x512 / 256x256',
   integrationStatus: 'integrated',
-  visualQaStatus: 'pending',
-  inspectedInGame: false,
-  status: 'pending',
+  visualQaStatus: reviewedStatus(id),
+  inspectedInGame: reviewedStatus(id) !== 'pending',
+  status: reviewedStatus(id) === 'approved' ? 'approved' : 'pending',
 });
 
 export const EIDRATH_ASSET_MANIFEST: Record<string, AssetDefinition> = {
