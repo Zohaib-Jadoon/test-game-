@@ -1,9 +1,10 @@
 # EIDRATH: The Last Oath — Master Design & Architecture Document
 
 **Genre:** Third-Person Open-World Dark-Fantasy Action RPG  
-**Vertical Slice Region:** Frostheim (500 m × 500 m continuous alpine open world, 8 landmarks)  
-**Target Standard:** Photorealistic Nordic environmental atmosphere paired with weighty, over-the-shoulder, animation-blended third-person combat  
-**Stack:** React 19, TypeScript 7, Three.js 0.187, Express Live Blender Bridge, Vite 8 + Workbox PWA (`eidrath-v2`), Blender 5.3.0 headless CLI + MPFB2 v2.0.18
+**Full Campaign Vision (7 Kingdoms):** **Frostheim** (playable vertical slice), **Valtherion**, **Sylvaris**, **Ashkar**, **Solmara**, **Mournveil**, and **Aetherion** — centered on Kaelen's resurrection, Lyra's companion arc, Borin, the **Seven Gods**, the **Forgotten One**, branching moral choices (`Mercy / Pragmatic / Revenge`), factions, crafting, classless progression, and **5 endings**.  
+**Target Standard:** Realistic, cinematic third-person dark-fantasy action RPG inspired by *Skyrim*'s world exploration and *God of War*'s weighty combat, camera, and boss presentation (original lore & free assets only).  
+**Selected Native Engine (2026-11-26):** **Unreal Engine 5.8.4** (`D:\game\UE_5.8`, DX11 SM5 hardware-calibrated default for GTX 1650 SUPER 4 GB VRAM — see [ENGINE_DECISION.md](ENGINE_DECISION.md)).  
+**Preserved Web Migration Reference:** React 19 + TypeScript 7 + Three.js 0.187 (`src/`) + Express Live Blender Bridge (`server.ts`) retained with all `25/25` passing contract tests until full native campaign parity is complete.
 
 ---
 

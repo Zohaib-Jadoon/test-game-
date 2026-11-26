@@ -1,0 +1,15 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "RPG",
+	"Description": "EIDRATH: The Last Oath — UE 5.8.4 GTX 1650 SUPER Evaluation & Vertical Slice",
+	"Plugins": [
+		{ "Name": "ModelingToolsEditorMode", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "Niagara", "Enabled": true },
+		{ "Name": "PythonScriptPlugin", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "EditorScriptingUtilities", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "Interchange", "Enabled": true },
+		{ "Name": "Fab", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "Bridge", "Enabled": true, "TargetAllowList": [ "Editor" ] }
+	]
+}

@@ -52,3 +52,42 @@ Daytime Antigravity until 20:00 PKT; ChatGPT works when requested. Each shift pu
 
 ## Follow-up shift — realistic asset integration and choppy movement (2026-11-26)
 The owner explicitly asked ChatGPT to implement, not provide another prompt. The first source commit of this follow-up is d1aad3d7fdd0dbf8d0ab7e52f5a095a7a9350bbc. Preserved the existing branch, saves, quest content and current game engine for these changes. Actual changes: retain gait phase on locomotion clip switches; damp animation rate and velocity; prevent bind-pose fade on repeated action; drive attack animation pose from windup/active/recovery timeline; sample weapon socket after movement/mixer; directional dodge; gate jumping during actions; preserve real elapsed time down to 10 FPS with bounded substeps; suppress walking sounds when stationary/airborne; hysteresis on gait transitions; preserve each imported mesh's actual transform in instanced forest and split instance batches into chunk groups; preserve complete source mocap cycles and continuous quaternion hemispheres in Blender retargeter. Authored title/world scene loader plus empty registration config; actual ready scenes are NOT activated until exported. Added free source catalog, safe ZIP acquisition tool and Blender export/activation utility. See docs/READY_SCENE_INTEGRATION.md. Pure motionMath.ts helper was executed with Node 22 strip-types, damping/substeps/gait/attack-boundary assertions plus 501 monotonic samples passed. Git blob identity should be checked against 63ac365a8e5892e86df0e2aae03a39c8b4abd69a. Full dependency build, Blender export, GPU/gameplay/audio checks still not run. Internet DNS failed in container, Git clone failed, direct Poly Haven archive download failed even via download tool; no Blender engine binary installed here. No new actual artist scene/character/animation binary has been acquired or rendered. Do not claim visual overhaul complete. Next shift: fetch this branch, run full tests, use acquisition + export scripts on local Windows, install selected free engine if beneficial, replace actual source characters/attack animations and environment art, inspect real visual/audio captures and record exact results. No cost incurred.
+
+---
+
+## Shift handoff: Antigravity • 2026-11-26 (PKT)
+
+- **GitHub Branch:** `eidrath/overhaul` (`https://github.com/Zohaib-Jadoon/test-game-`)
+- **Base Merged:** Fast-forward merged `origin/eidrath/native-cowork` (`d65befb66447b101754cee6d42868b45837a0f8c`) cleanly into `eidrath/overhaul`. (`main` untouched at `ff3eaed`.)
+- **Selected Engine:** **Unreal Engine 5.8.4** (`D:\game\UE_5.8`) running **DirectX 11 (`-d3d11`, SM5)** default, Lumen GI & Hardware Ray Tracing disabled, Nanite disabled, conventional CSM shadows, `r.MotionBlurQuality=0`, `r.Streaming.PoolSize=1000..1200`. Godot 4 (MIT) recorded as 0%-royalty fallback.
+- **Why Selected (Real Hardware Measurements):**
+  - `Lvl_FrostheimTrial` (`390` measured frames): `dx11_medium` **199.1 FPS avg / 145.7 FPS 1% low (`7.83 ms` max, `2459 MiB` total VRAM)** vs `dx12_medium` **129.7 FPS avg / 15.0 FPS 1% low (`134.09 ms` PSO hitch, `2653 MiB` VRAM)**.
+  - `Lvl_FrostheimValley` (`1,680` measured frames/preset on full artist-authored scene): `Low` **295.9 FPS avg (195.2 1% low)**, `Medium` **196.5 FPS avg (145.8 1% low)**, `High` **173.0 FPS avg (118.1 1% low)**, `Ultra` **165.9 FPS avg (126.3 1% low, `2310 MiB` peak total VRAM, `53.6%` avg GPU)**.
+- **Detected Hardware (`HARDWARE_PROFILE.md`):** Windows 11 Pro (`26200`), AMD Ryzen 5 5600X (`6C/12T`), NVIDIA GeForce GTX 1650 SUPER (`4096 MiB` VRAM, Driver `610.88`, D3D Feature Level `12_1`, Vulkan `1.4.341`), `15.92 GiB` RAM, NVMe `D:` (`355.1 GB` free), UE `5.8.4` (`Fab 0.0.23`, `Bridge 5.8.0`), Unity `6000.3.9f1`, Blender `5.3.0`, VS 2022 Build Tools `14.44.35207` + Windows SDK `10.0.26100.0` + newly installed free `.NET Framework 4.8.1 Developer Pack` (`NETFXSDK\4.8.1`).
+- **Implemented & Modified Files:**
+  - `native/EidrathUE_Trial/` (Blueprint + Interchange project, `DefaultEngine.ini`, `DefaultScalability.ini`, packaged to `native/Builds/Win64/EidrathUE_Trial.exe` `981 MB` via `RunUAT.bat` in `104.29s`, 10s live launch smoke check PASS).
+  - `native/EidrathUE/` (C++ `TP_ThirdPerson` + `Variant_Combat` project scaffolded; UHT passed `84` files).
+  - `tools/blender/export_pine_forest_for_ue.py` & `export_ue_characters_and_heights.py`.
+  - `tools/ue/setup_frostheim_trial.py`, `build_frostheim_valley.py`, `benchmark_ue_trial.ps1`, `benchmark_frostheim_valley.ps1`.
+  - `.gitignore` updated to ignore UE `Binaries/`, `Intermediate/`, `Saved/`, `DerivedDataCache/`, `.vs/`, `native/Builds/`, and reproducible `native/EidrathUE_Trial/Content/Eidrath/` generated `.uasset`s.
+  - Reports created/updated: `HARDWARE_PROFILE.md`, `ENGINE_DECISION.md`, `ENGINE_MIGRATION_REPORT.md`, `ANIMATION_REPORT.md`, `BUILD_INSTRUCTIONS.md`, `PERFORMANCE_REPORT.md`, `GAMEPLAY_QA_REPORT.md`, `DEVELOPMENT_PROGRESS.md`, `ASSET_CREDITS.md`, `game.md`.
+- **Assets Downloaded & Integrated (`_asset_cache/`, CC0-1.0):**
+  - Poly Haven **Pine Forest** complete scene (`pine_forest.zip`, `2.62 GB`, SHA-256 `9d08c488...`) -> exported terrain, 3 photogrammetry Montaigle Ruins, 3 realized pine/fir trees, mossy rocks, dead tree, roots (`176 MB -> 67 MB` optimized GLBs).
+  - 4 Poly Haven 1K FBX weapons (`ornate_war_hammer`, `ornate_medieval_mace`, `ornate_medieval_dagger`, `antique_estoc`).
+  - 6 FFmpeg-transcoded 48 kHz WAVs (`MUS_Frostheim_Explore`, `MUS_Warden_Boss`, `AMB_Alpine_Wind`, `AMB_Campfire`, `SFX_Sword_Swing`, `SFX_Footstep_Snow`).
+- **Bugs Identified & Fixed:**
+  1. Installed missing `.NET Framework 4.8.1 Developer Pack` fixing UBT `SwarmInterface` error.
+  2. Fixed UE `-ExecutePythonScript` Windows backslash escape (`tools\ue` parsed `\t`/`\u`) by using forward slashes.
+  3. Fixed `Rotator(roll, pitch, yaw)` positional-arg bug that pitched `BP_ThirdPersonCharacter` (`SKM_Kaelen`) `-90°` prone -> fixed via `set_editor_property("relative_rotation", unreal.Rotator(roll=0, pitch=0, yaw=-90))` + verified upright in `art/qa/ue_frostheim/valley_dx11_high.png`.
+  4. Replaced Quinn default mannequin on `BP_ThirdPersonCharacter` with unified `SKM_Kaelen` (`26,522` polys).
+  5. Fixed frame-1 `Shot` texture blur & MotionBlur smearing (`r.MotionBlurQuality=0`, `r.Streaming.FullyLoadUsedTextures 1`), beige terrain material (`M_FrostheimSnow`), and uphill `RavenholdCabin` gap (`min_corner_z - 35 cm`).
+- **Tests Executed:**
+  - `npm run lint`: PASS (`0` errors)
+  - `npm test`: **25/25 PASS** (including all `Cowork:` + `Motion:` tests)
+  - `npm run build`: PASS (`315.90 kB` gzip)
+  - UE 5.8.4 `CsvProfile` 1080p unrecorded benchmarks + `RunUAT.bat` Win64 package + 10s `.exe` smoke launch: PASS.
+- **Remaining Blockers / Next Shift Tasks (For ChatGPT / Local Session):**
+  1. **Close Open UE Project Browser (`PID 46804`)** cleanly to release `Global\LiveCoding_D++game+UE_5.8+Engine+Binaries+Win64+UnrealEditor.exe`, then run `Build.bat TP_ThirdPersonEditor` on `native/EidrathUE/` and merge `/Game/Eidrath/` assets with C++ `Variant_Combat` (`CombatCharacter`, `AnimNotify_DoAttackTrace`, StateTree AI).
+  2. Author full `ABP_Kaelen` (`BlendSpace 2D` locomotion + combat montages + `IKRig` foot placement + `AnimNotify_FootstepSnow`), replacing temporary single-node `SKM_KaelenIdle` playback.
+  3. Port `src/content/eidrathContent.ts` quests, items, 7 skill trees, crafting, dialogues, and `SaveGame` v1 JSON schema into UE `UDataTable` / `USaveGame` + dark-fantasy `CommonUI` HUD/Inventory/Map, plus complete Oathgrave Tomb, Ravenhold Village, and Warden's Keep 3-phase boss encounter + audio-captured traversal video.
+  4. Sign into **Fab / Quixel Bridge** inside UE Editor GUI (local user task, no auth bypass) to pull Megascans snow/pine/Nordic stone packs if desired, and resolve standalone redistribution confirmation for `Xbot.glb`/`Michelle.glb` mocap clips per Section 5 of `ASSET_CREDITS.md`.

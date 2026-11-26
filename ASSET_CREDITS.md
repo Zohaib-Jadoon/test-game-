@@ -38,3 +38,14 @@ In strict compliance with licensing and authentication rules (no credential bypa
 ## 5. Cowork licensing verification status (2026-11-26)
 
 Previous credits are preserved as the original author's provenance claims, not independent legal verification. In particular, the MIT license of Three.js code is not by itself proof that every third-party example model and embedded animation is MIT-licensed for standalone redistribution. Verify individual author/license metadata for Soldier.glb, Xbot.glb and Michelle.glb and their retargeted derivatives. Adobe Mixamo FAQ: https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html . Free game use does not automatically permit redistribution of raw source assets. Keep questionable assets out of release/public source distributions until their specific rights are established; prefer CC0 or clearly permissive originals. No new third-party binary assets were added during this shift.
+
+## 6. Native Unreal Engine 5.8 Overhaul Additions (2026-11-26 Antigravity Shift)
+
+All newly downloaded source files acquired during the UE 5.8 migration stay under `_asset_cache/` (gitignored) and use verified **CC0 1.0 Public Domain** licenses:
+- **Poly Haven Pine Forest Complete Scene** (`https://polyhaven.com/collections/pine_forest`, creator: Rob Tuytel and contributors) — License: `CC0 1.0` — Archive `pine_forest.zip` (`2,746,288,533` bytes), SHA-256 `9d08c4883a0b0eac2bd001ef874795d5120889b59e97c52f482cf1da77e42c33` (`_asset_cache/ready-scenes/pine-forest/receipt.json`). Provides `terrain_main` (`SM_FrostheimTerrain`), `montaigle_ruins_01/02/03`, `pine_sapling_medium_a/b`, `fir_sapling_medium_a`, `rock_moss_hand_placed_01/02`, `dead_tree_lod0`, and `tree_roots_a_lod0`.
+- **Poly Haven 1K FBX Weapon Models** — License: `CC0 1.0` (`_asset_cache/polyhaven_weapons/weapons_ledger.json`):
+  - `ornate_war_hammer` (`https://polyhaven.com/a/ornate_war_hammer`, James Ray Cock / Ulan Cabanilla)
+  - `ornate_medieval_mace` (`https://polyhaven.com/a/ornate_medieval_mace`, Ulan Cabanilla)
+  - `ornate_medieval_dagger` (`https://polyhaven.com/a/ornate_medieval_dagger`, Sofia Pahaoja)
+  - `antique_estoc` (`https://polyhaven.com/a/antique_estoc`)
+- **Epic Games UE 5.8.4 Included Template Blueprints & Plugins:** Standard Unreal Engine `TP_ThirdPersonBP` / `TP_ThirdPerson` starter logic (`Variant_Combat`), `Fab` (`0.0.23`), and `Quixel Bridge` plugins subject to Unreal Engine EULA (`https://www.unrealengine.com/en-US/license`). Interactive Fab/Bridge cloud login was not bypassed; only local offline template/CC0 assets were imported.

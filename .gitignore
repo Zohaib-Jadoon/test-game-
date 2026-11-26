@@ -10,3 +10,13 @@ _asset_cache/
 __pycache__/
 *.pyc
 *.blend1
+native/*/Binaries/
+native/*/Intermediate/
+native/*/Saved/
+native/*/DerivedDataCache/
+native/*/.vs/
+native/*/.vsconfig
+native/*/*.sln
+native/*/*.VC.db
+native/Builds/
+native/EidrathUE_Trial/Content/Eidrath/
