@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import * as THREE from 'three';
+import { AnimationController } from './animation/AnimationController';
+import { CinematicCamera } from './camera/CinematicCamera';
 
 import {
   ATTACKS,
@@ -363,4 +366,88 @@ test('QA-10: Overhaul combat input buffering, weapon timing weights, directional
     }),
     true,
   );
+});
+
+test('Cowork: one-shot animation emits terminal markers once and fallback combo restarts', () => {
+  const root = new THREE.Object3D();
+  const mixer = new THREE.AnimationMixer(root);
+  const clips = new Map([['lightattack', new THREE.AnimationClip('LightAttack', 1, [])]]);
+  const events: string[] = [];
+  const ctrl = new AnimationController(mixer, clips, { onEvent: (event) => events.push(event) });
+  ctrl.play('LightAttack', { loop: false, fadeSec: 0 });
+  ctrl.update(0.2);
+  ctrl.update(0.8);
+  ctrl.update(0.1);
+  assert.deepEqual(events, ['swing_whoosh', 'hitbox_start', 'hitbox_end']);
+  ctrl.play('LightAttack2', { loop: false, fadeSec: 0 });
+  ctrl.update(0.7);
+  assert.equal(events.filter((e) => e === 'hitbox_start').length, 2);
+  ctrl.dispose();
+});
+
+test('Cowork: animation switching from a loop to one-shot on same fallback restarts', () => {
+  const root = new THREE.Object3D();
+  const mixer = new THREE.AnimationMixer(root);
+  const idle = new THREE.AnimationClip('Idle', 1, []);
+  const ctrl = new AnimationController(mixer, new Map([['idle', idle]]));
+  ctrl.play('Idle');
+  ctrl.update(0.5);
+  ctrl.play('DrawSword', { loop: false, fadeSec: 0 });
+  const action = mixer.clipAction(idle);
+  assert.equal(action.loop, THREE.LoopOnce);
+  assert.equal(action.time, 0);
+  ctrl.dispose();
+});
+
+test('Cowork: heavy stamina gating uses the actual scaled cost', () => {
+  const attack = ATTACKS.heavy_1;
+  const scaled = Math.round(attack.staminaCost * 1.25);
+  const timeline = createCombatTimeline();
+  assert.equal(startAttackAction(timeline, 'heavy_1', scaled - 1, 100, 1.25).started, false);
+  const result = startAttackAction(timeline, 'heavy_1', scaled, 100, 1.25);
+  assert.equal(result.started, true);
+  assert.equal(result.staminaCost, scaled);
+});
+
+test('Cowork: invalid save sections are rejected; corrupt primary cannot overwrite good backup', () => {
+  const store = installMockLocalStorage();
+  const storage = globalThis.localStorage;
+  const save = createNewGameSave('slot_1');
+  assert.equal(validateSaveGame({ ...save, companion: undefined }).valid, false);
+  assert.equal(validateSaveGame({ ...save, world: { ...save.world, openedChests: null } }).valid, false);
+  assert.equal(validateSaveGame({ ...save, player: { ...save.player, stamina: undefined } }).valid, false);
+  assert.equal(validateSaveGame({ ...save, slotId: 'unknown' }).valid, false);
+  save.player.gold = 123;
+  assert.equal(writeSaveSlot('slot_1', save, storage).ok, true);
+  save.player.gold = 456;
+  assert.equal(writeSaveSlot('slot_1', save, storage).ok, true);
+  const backup = store.get('eidrath_save_v1_slot_1_backup');
+  store.set('eidrath_save_v1_slot_1', '{corrupt');
+  save.player.gold = 789;
+  assert.equal(writeSaveSlot('slot_1', save, storage).ok, true);
+  assert.equal(store.get('eidrath_save_v1_slot_1_backup'), backup);
+  store.set('eidrath_save_v1_slot_1', JSON.stringify(createNewGameSave('slot_2')));
+  assert.equal(readSaveSlot('slot_1', storage).save?.player.gold, 123);
+});
+
+test('Cowork: camera pulls in immediately when a wall intersects the actual shoulder path', () => {
+  const camera = new THREE.PerspectiveCamera(56, 1, 0.05, 200);
+  const rig = new CinematicCamera({ baseDistance: 3.4, reducedMotion: true });
+  rig.yaw = 0;
+  rig.pitch = 0;
+  const playerPos = new THREE.Vector3(-145, getTerrainHeight(-145, 145), 145);
+  const params = { playerPos, playerYaw: 0, inCombat: false, isSprinting: false, isBossFight: false, lockedTargetPos: null, collisionMeshes: [] as THREE.Object3D[] };
+  rig.update(camera, 1 / 60, params);
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 0.25), new THREE.MeshBasicMaterial());
+  wall.position.set(playerPos.x, playerPos.y + 1.5, playerPos.z + 1.5);
+  wall.updateMatrixWorld(true);
+  params.collisionMeshes = [wall];
+  rig.update(camera, 1 / 60, params);
+  assert.ok(camera.position.z < wall.position.z - 0.125, 'Camera must remain in front of the wall');
+  wall.geometry.dispose();
+  (wall.material as THREE.Material).dispose();
+});
+
+test('Cowork: imported runtime assets are not visually approved by default', () => {
+  assert.ok(listManifestAssets().every((asset) => !isAssetVisualQaApproved(asset)));
 });

@@ -143,6 +143,11 @@ export function createNewGameSave(slotId: SaveSlotId = 'autosave'): SaveGame {
   };
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+const numericRecord = (v: unknown): boolean => isRecord(v) && Object.values(v).every(isFiniteNumber);
+
 export function validateSaveGame(raw: unknown): { valid: boolean; save?: SaveGame; reason?: string } {
   if (!raw || typeof raw !== 'object') {
     return { valid: false, reason: 'Save payload is not an object.' };
@@ -151,7 +156,7 @@ export function validateSaveGame(raw: unknown): { valid: boolean; save?: SaveGam
   if (obj.schemaVersion !== SAVE_SCHEMA_VERSION) {
     return { valid: false, reason: `Unsupported save schema version: ${String(obj.schemaVersion)}` };
   }
-  if (typeof obj.slotId !== 'string' || !obj.slotId) {
+  if (typeof obj.slotId !== 'string' || !SAVE_SLOTS.includes(obj.slotId as SaveSlotId)) {
     return { valid: false, reason: 'Missing slotId.' };
   }
   const player = obj.player as Record<string, unknown> | undefined;
@@ -168,8 +173,29 @@ export function validateSaveGame(raw: unknown): { valid: boolean; save?: SaveGam
   ) {
     return { valid: false, reason: 'Invalid player numeric bounds.' };
   }
-  if (!Array.isArray(player.inventory)) {
-    return { valid: false, reason: 'Invalid player inventory array.' };
+  if (!['y', 'yaw', 'stamina', 'maxStamina', 'mana', 'maxMana', 'divineMeter', 'level', 'xp', 'skillPoints', 'gold'].every((key) => isFiniteNumber(player[key])) ||
+    (player.maxStamina as number) <= 0 || (player.maxMana as number) <= 0 ||
+    !isRecord(player.attributes) || !['strength', 'dexterity', 'intelligence', 'vitality', 'divineCapacity'].every((key) => isFiniteNumber((player.attributes as Record<string, unknown>)[key])) ||
+    !numericRecord(player.skills) || !isRecord(player.equipment) ||
+    !isStringArray(player.unlockedAbilities) || !Array.isArray(player.inventory)) {
+    return { valid: false, reason: 'Invalid player stats, equipment or inventory.' };
+  }
+  if (!isFiniteNumber(obj.revision) || obj.revision < 0 || !isFiniteNumber(obj.playtimeSec) || typeof obj.updatedAt !== 'string' ||
+    !Number.isFinite(Date.parse(obj.updatedAt)) || typeof obj.regionName !== 'string' || typeof obj.checkpointId !== 'string' ||
+    !isRecord(obj.companion) || !isFiniteNumber(obj.companion.loyalty) ||
+    ![null, 'lyra'].includes(obj.companion.activeId as 'lyra' | null) ||
+    !['assist', 'attack', 'regroup', 'wait'].includes(String(obj.companion.command)) ||
+    !isRecord(obj.quests) || !Object.values(obj.quests).every((q) => isRecord(q) &&
+      ['active', 'completed', 'failed'].includes(String(q.status)) && numericRecord(q.counts) && typeof q.rewardClaimed === 'boolean') ||
+    (obj.trackedQuestId !== null && typeof obj.trackedQuestId !== 'string')) {
+    return { valid: false, reason: 'Invalid save metadata, companion or quest state.' };
+  }
+  if (typeof world.regionId !== 'string' || !['clear', 'snow', 'blizzard'].includes(String(world.weather)) ||
+    !isFiniteNumber(world.worldTimeHours) || !isFiniteNumber(world.weatherSeed) || !isFiniteNumber(world.corruption) ||
+    !['discoveredLandmarks', 'openedChests', 'solvedPuzzles', 'defeatedBosses', 'unlockedShortcuts', 'unlockedLore'].every((key) => isStringArray(world[key])) ||
+    !isRecord(world.flags) || !Object.values(world.flags).every((v) => typeof v === 'boolean') ||
+    !isRecord(world.domains) || !numericRecord(world.factions)) {
+    return { valid: false, reason: 'Invalid world state.' };
   }
 
   // Deep-clone & sanitize bounds + strip unknown items cleanly
@@ -180,14 +206,14 @@ export function validateSaveGame(raw: unknown): { valid: boolean; save?: SaveGam
   clone.player.divineMeter = Math.max(0, Math.min(100, clone.player.divineMeter));
   clone.player.gold = Math.max(0, Math.floor(clone.player.gold));
   clone.player.inventory = clone.player.inventory.filter(
-    (entry) => entry && typeof entry.itemId === 'string' && Boolean(ITEMS[entry.itemId]) && entry.quantity > 0,
+    (entry) => entry && typeof entry.itemId === 'string' && Object.prototype.hasOwnProperty.call(ITEMS, entry.itemId) && Number.isSafeInteger(entry.quantity) && entry.quantity > 0,
   );
   return { valid: true, save: clone };
 }
 
 function getStorage(customStorage?: Storage): Storage | null {
   if (customStorage) return customStorage;
-  if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  try { if (typeof window !== 'undefined' && window.localStorage) return window.localStorage; } catch { /* disabled or denied */ }
   return null;
 }
 
@@ -257,16 +283,21 @@ export function writeSaveSlot(
   const backupKey = `${key}${BACKUP_SUFFIX}`;
   const serialized = JSON.stringify(check.save);
 
-  if (storage) {
-    try {
-      const prev = storage.getItem(key);
-      if (prev) {
-        storage.setItem(backupKey, prev);
-      }
-      storage.setItem(key, serialized);
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : 'Storage write failed.' };
+  if (!storage) return { ok: false, error: 'Local save storage is unavailable.' };
+  try {
+    const prev = storage.getItem(key);
+    // Do not overwrite the last known-good backup with a corrupted primary.
+    if (prev) {
+      let previousValid = false;
+      try {
+        const previous = validateSaveGame(JSON.parse(prev));
+        previousValid = previous.valid && previous.save?.slotId === slotId;
+      } catch { /* preserve the previous backup */ }
+      if (previousValid) storage.setItem(backupKey, prev);
     }
+    storage.setItem(key, serialized);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Storage write failed.' };
   }
   void mirrorToIdb(key, serialized);
   return { ok: true, save: check.save };
@@ -290,18 +321,22 @@ export function readSaveSlot(
     try {
       const parsed = JSON.parse(raw);
       const checked = validateSaveGame(parsed);
-      return checked.valid && checked.save ? checked.save : null;
+      return checked.valid && checked.save?.slotId === slotId ? checked.save : null;
     } catch {
       return null;
     }
   };
 
-  const primary = tryParse(storage.getItem(key));
+  let primaryRaw: string | null;
+  let backupRaw: string | null;
+  try { primaryRaw = storage.getItem(key); backupRaw = storage.getItem(backupKey); }
+  catch { return { save: null, recoveredFromBackup: false, error: 'Local save storage is unavailable.' }; }
+  const primary = tryParse(primaryRaw);
   if (primary) {
     return { save: primary, recoveredFromBackup: false };
   }
 
-  const backup = tryParse(storage.getItem(backupKey));
+  const backup = tryParse(backupRaw);
   if (backup) {
     // Self-heal primary slot from verified backup
     try {
@@ -312,7 +347,7 @@ export function readSaveSlot(
     return { save: backup, recoveredFromBackup: true };
   }
 
-  const hadPrimary = storage.getItem(key) !== null;
+  const hadPrimary = primaryRaw !== null;
   return {
     save: null,
     recoveredFromBackup: false,

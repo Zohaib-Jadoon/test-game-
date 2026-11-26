@@ -55,6 +55,16 @@ export class CinematicCamera {
     Object.assign(this.config, partial);
   }
 
+  public resetPose(): void {
+    this.initialized = false;
+    this.introTimer = 0;
+    this.bossIntro = null;
+    this.dialogueShot = null;
+    this.shakeTimer = 0;
+    this.shakeTrauma = 0;
+    this.zoomPulse = 0;
+  }
+
   public toggleShoulder(): void {
     this.config.shoulderSign = this.config.shoulderSign === 1 ? -1 : 1;
   }
@@ -180,25 +190,8 @@ export class CinematicCamera {
       Math.cos(this.yaw) * cosP,
     ).normalize();
 
-    let safeDist = this.currentDist;
-
-    // World architecture & rock collision sweep
-    if (collisionMeshes.length > 0) {
-      this.raycaster.set(pivot, dir);
-      this.raycaster.near = 0.25;
-      this.raycaster.far = this.currentDist;
-      const hits = this.raycaster.intersectObjects(collisionMeshes, true);
-      for (const hit of hits) {
-        if (!hit.object.visible) continue;
-        if (hit.object.name.startsWith('UCX_') || hit.object.name.startsWith('ACTOR_') || hit.object.name.startsWith('CHR_')) {
-          continue;
-        }
-        safeDist = Math.min(safeDist, Math.max(0.95, hit.distance - 0.35));
-        break;
-      }
-    }
-
-    const desiredPos = pivot.clone().addScaledVector(dir, safeDist);
+    // Include the complete shoulder offset in the actual collision segment.
+    const desiredPos = pivot.clone().addScaledVector(dir, this.currentDist);
     desiredPos.x += rightX * this.currentShoulder * 0.45;
     desiredPos.z += rightZ * this.currentShoulder * 0.45;
 
@@ -230,6 +223,33 @@ export class CinematicCamera {
         );
 
     this.applySmoothed(camera, desiredPos, lookTarget, this.currentFov, dt);
+    // Resolve the *smoothed* camera, not just its destination. Pull in immediately
+    // on collision and let normal smoothing move it out again when clear.
+    this.constrainBoom(pivot, this.curPos, collisionMeshes);
+    camera.position.copy(this.curPos);
+    camera.lookAt(this.curLook);
+  }
+
+  private constrainBoom(pivot: THREE.Vector3, pos: THREE.Vector3, collisionMeshes: THREE.Object3D[]): void {
+    const segment = pos.clone().sub(pivot);
+    const distance = segment.length();
+    if (distance < 0.05 || collisionMeshes.length === 0) return;
+    const direction = segment.multiplyScalar(1 / distance);
+    this.raycaster.set(pivot, direction);
+    this.raycaster.near = 0.02;
+    this.raycaster.far = distance;
+    for (const hit of this.raycaster.intersectObjects(collisionMeshes, true)) {
+      // Raycaster does not automatically skip invisible parent groups.
+      let node: THREE.Object3D | null = hit.object;
+      let skip = false;
+      while (node) {
+        if (!node.visible || /^(UCX_|ACTOR_|CHR_)/i.test(node.name)) { skip = true; break; }
+        node = node.parent;
+      }
+      if (skip) continue;
+      pos.copy(pivot).addScaledVector(direction, Math.max(0.02, hit.distance - 0.30));
+      break;
+    }
   }
 
   private applySmoothed(
@@ -244,8 +264,8 @@ export class CinematicCamera {
       this.curLook.copy(desiredLook);
       this.initialized = true;
     } else {
-      const alphaPos = Math.min(1, 14 * dt);
-      const alphaLook = Math.min(1, 16 * dt);
+      const alphaPos = 1 - Math.exp(-14 * dt);
+      const alphaLook = 1 - Math.exp(-16 * dt);
       this.curPos.lerp(desiredPos, alphaPos);
       this.curLook.lerp(desiredLook, alphaLook);
     }

@@ -50,6 +50,7 @@ export const EidrathHud: React.FC<EidrathHudProps> = ({
     () => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
   );
   const joyRef = useRef<HTMLDivElement | null>(null);
+  const joyTouchId = useRef<number | null>(null);
   const lookTouchRef = useRef<{ id: number; x: number; y: number } | null>(null);
 
   const cardinals: Array<{ label: string; angle: number }> = [
@@ -61,7 +62,7 @@ export const EidrathHud: React.FC<EidrathHudProps> = ({
 
   const handleJoyMove = (e: React.TouchEvent<HTMLDivElement>) => {
     const rect = joyRef.current?.getBoundingClientRect();
-    const t = e.touches[0];
+    const t = Array.from(e.touches).find((touch) => touch.identifier === joyTouchId.current);
     if (!rect || !t) return;
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
@@ -501,9 +502,18 @@ export const EidrathHud: React.FC<EidrathHudProps> = ({
         <>
           <div
             ref={joyRef}
-            onTouchStart={handleJoyMove}
+            onTouchStart={(e) => {
+              if (joyTouchId.current === null) joyTouchId.current = e.changedTouches[0]?.identifier ?? null;
+              handleJoyMove(e);
+            }}
             onTouchMove={handleJoyMove}
-            onTouchEnd={() => onTouchMove(0, 0)}
+            onTouchEnd={(e) => {
+              if (Array.from(e.changedTouches).some((t) => t.identifier === joyTouchId.current)) {
+                joyTouchId.current = null;
+                onTouchMove(0, 0);
+              }
+            }}
+            onTouchCancel={() => { joyTouchId.current = null; onTouchMove(0, 0); }}
             className="pointer-events-auto fixed bottom-60 left-4 w-24 h-24 rounded-full border-2 border-[#b89552]/70 bg-[#11151b]/70 flex items-center justify-center touch-none"
           >
             <div className="w-9 h-9 rounded-full border border-[#dfc38a]/70 bg-[#b89552]/40" />
@@ -526,42 +536,55 @@ export const EidrathHud: React.FC<EidrathHudProps> = ({
                 }
               }
             }}
-            onTouchEnd={() => {
-              lookTouchRef.current = null;
+            onTouchEnd={(e) => {
+              if (Array.from(e.changedTouches).some((t) => t.identifier === lookTouchRef.current?.id)) lookTouchRef.current = null;
             }}
+            onTouchCancel={() => { lookTouchRef.current = null; }}
             className="pointer-events-auto fixed top-36 right-0 w-1/2 h-1/3 touch-none"
           />
 
           <div className="pointer-events-auto fixed bottom-5 right-3 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onTouchStart={() => onTouchAction('light')}
-              onClick={() => onTouchAction('light')}
+              onPointerDown={(e) => { e.preventDefault(); onTouchAction('light'); }}
+              onClick={(e) => { if (e.detail === 0) onTouchAction('light'); }}
               className="w-13 h-13 rounded-full border border-[#b89552] bg-[#131820]/90 text-[10px] text-[#efe4c8] font-bold"
             >
               ATK
             </button>
             <button
               type="button"
-              onTouchStart={() => onTouchAction('heavy')}
-              onClick={() => onTouchAction('heavy')}
+              onPointerDown={(e) => { e.preventDefault(); onTouchAction('heavy'); }}
+              onClick={(e) => { if (e.detail === 0) onTouchAction('heavy'); }}
               className="w-13 h-13 rounded-full border border-[#8f2d29] bg-[#131820]/90 text-[10px] text-[#efe4c8] font-bold"
             >
               HEAVY
             </button>
             <button
               type="button"
-              onTouchStart={() => onTouchAction('block')}
-              onTouchEnd={() => onTouchAction('release_block')}
-              onClick={() => onTouchAction('block')}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                onTouchAction('block');
+              }}
+              onPointerUp={() => onTouchAction('release_block')}
+              onPointerCancel={() => onTouchAction('release_block')}
+              onLostPointerCapture={() => onTouchAction('release_block')}
+              onKeyDown={(e) => {
+                if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); onTouchAction('block'); }
+              }}
+              onKeyUp={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onTouchAction('release_block'); }
+              }}
+              onBlur={() => onTouchAction('release_block')}
               className="w-13 h-13 rounded-full border border-[#7fa8c4] bg-[#131820]/90 text-[10px] text-[#efe4c8]"
             >
               PARRY
             </button>
             <button
               type="button"
-              onTouchStart={() => onTouchAction('dodge')}
-              onClick={() => onTouchAction('dodge')}
+              onPointerDown={(e) => { e.preventDefault(); onTouchAction('dodge'); }}
+              onClick={(e) => { if (e.detail === 0) onTouchAction('dodge'); }}
               className="w-13 h-13 rounded-full border border-[#b89552]/50 bg-[#131820]/90 text-[10px] text-[#efe4c8]"
             >
               DODGE

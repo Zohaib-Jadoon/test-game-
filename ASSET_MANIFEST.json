@@ -49,8 +49,8 @@
       "embeddedImages": 12,
       "animationsCount": 8,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "chr_kaelen",
@@ -70,8 +70,8 @@
       "embeddedImages": 11,
       "animationsCount": 31,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "chr_lyra",
@@ -91,8 +91,8 @@
       "embeddedImages": 11,
       "animationsCount": 9,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "npc_borin",
@@ -112,8 +112,8 @@
       "embeddedImages": 11,
       "animationsCount": 9,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "npc_edda",
@@ -133,8 +133,8 @@
       "embeddedImages": 14,
       "animationsCount": 9,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "npc_villager",
@@ -154,8 +154,8 @@
       "embeddedImages": 8,
       "animationsCount": 9,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "enm_bandit",
@@ -175,8 +175,8 @@
       "embeddedImages": 8,
       "animationsCount": 8,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "enm_frost_troll",
@@ -196,8 +196,8 @@
       "embeddedImages": 9,
       "animationsCount": 8,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "enm_frost_wolf",
@@ -217,8 +217,8 @@
       "embeddedImages": 3,
       "animationsCount": 5,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "enm_hollow_archer",
@@ -238,8 +238,8 @@
       "embeddedImages": 11,
       "animationsCount": 8,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "enm_hollow_knight",
@@ -259,8 +259,8 @@
       "embeddedImages": 14,
       "animationsCount": 8,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "enm_hollow_swordsman",
@@ -280,8 +280,8 @@
       "embeddedImages": 11,
       "animationsCount": 8,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_altar_pedestal",
@@ -301,8 +301,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_anvil",
@@ -322,8 +322,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_banner",
@@ -343,14 +343,14 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_barrel",
       "name": "Prop Barrel",
       "category": "props",
-      "creator": "Poly Haven \u2014 Barrel 01 (Barrel_01)",
+      "creator": "Poly Haven — Barrel 01 (Barrel_01)",
       "sourceUrl": "https://polyhaven.com/a/Barrel_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -364,8 +364,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_bellows",
@@ -385,8 +385,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_bench",
@@ -406,8 +406,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_bone_pile",
@@ -427,14 +427,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_brazier",
       "name": "Prop Brazier",
       "category": "props",
-      "creator": "Poly Haven \u2014 Brass Candleholders (brass_candleholders)",
+      "creator": "Poly Haven — Brass Candleholders (brass_candleholders)",
       "sourceUrl": "https://polyhaven.com/a/brass_candleholders",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -448,8 +448,8 @@
       "embeddedImages": 14,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_cairn",
@@ -469,14 +469,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_campfire",
       "name": "Prop Campfire",
       "category": "props",
-      "creator": "Poly Haven \u2014 Stone Fire Pit (stone_fire_pit)",
+      "creator": "Poly Haven — Stone Fire Pit (stone_fire_pit)",
       "sourceUrl": "https://polyhaven.com/a/stone_fire_pit",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -490,8 +490,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_cart",
@@ -511,8 +511,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_chest",
@@ -532,8 +532,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_crate",
@@ -553,8 +553,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_fence",
@@ -574,8 +574,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_frost_herb",
@@ -595,14 +595,14 @@
       "embeddedImages": 0,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_lantern_post",
       "name": "Prop Lantern Post",
       "category": "props",
-      "creator": "Poly Haven \u2014 Lantern 01 + Weathered Timber",
+      "creator": "Poly Haven — Lantern 01 + Weathered Timber",
       "sourceUrl": "https://polyhaven.com/a/Lantern_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -616,8 +616,8 @@
       "embeddedImages": 7,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_log_pile",
@@ -637,14 +637,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_market_stall",
       "name": "Prop Market Stall",
       "category": "props",
-      "creator": "Poly Haven \u2014 Wooden Table 01 (WoodenTable_01)",
+      "creator": "Poly Haven — Wooden Table 01 (WoodenTable_01)",
       "sourceUrl": "https://polyhaven.com/a/WoodenTable_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -658,8 +658,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_oath_rune_stone",
@@ -679,8 +679,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_ore_vein",
@@ -700,8 +700,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_seal_stone",
@@ -721,8 +721,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_signpost",
@@ -742,8 +742,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_stair_block",
@@ -763,8 +763,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_tent",
@@ -784,8 +784,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "prop_weapon_rack",
@@ -805,14 +805,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_frost_axe",
       "name": "Wpn Frost Axe",
       "category": "weapons",
-      "creator": "Poly Haven \u2014 Hatchet (hatchet)",
+      "creator": "Poly Haven — Hatchet (hatchet)",
       "sourceUrl": "https://polyhaven.com/a/hatchet",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -826,8 +826,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_iron_shield",
@@ -847,14 +847,14 @@
       "embeddedImages": 9,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_iron_sword",
       "name": "Wpn Iron Sword",
       "category": "weapons",
-      "creator": "Poly Haven \u2014 Antique Estoc (antique_estoc)",
+      "creator": "Poly Haven — Antique Estoc (antique_estoc)",
       "sourceUrl": "https://polyhaven.com/a/antique_estoc",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -868,8 +868,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_nightpiercer",
@@ -889,8 +889,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_oathbreaker",
@@ -910,8 +910,8 @@
       "embeddedImages": 9,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_oblivion_staff",
@@ -931,8 +931,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_torment_links",
@@ -952,8 +952,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "wpn_worldshatter",
@@ -973,8 +973,8 @@
       "embeddedImages": 9,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_borin_forge",
@@ -994,14 +994,14 @@
       "embeddedImages": 12,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_boulder",
       "name": "Env Boulder",
       "category": "world",
-      "creator": "Poly Haven \u2014 Boulder 01 (boulder_01)",
+      "creator": "Poly Haven — Boulder 01 (boulder_01)",
       "sourceUrl": "https://polyhaven.com/a/boulder_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1015,14 +1015,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_dead_trunk",
       "name": "Env Dead Trunk",
       "category": "world",
-      "creator": "Poly Haven \u2014 Dead Tree Trunk (dead_tree_trunk)",
+      "creator": "Poly Haven — Dead Tree Trunk (dead_tree_trunk)",
       "sourceUrl": "https://polyhaven.com/a/dead_tree_trunk",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1036,14 +1036,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_fern",
       "name": "Env Fern",
       "category": "world",
-      "creator": "Poly Haven \u2014 Fern 02 (fern_02)",
+      "creator": "Poly Haven — Fern 02 (fern_02)",
       "sourceUrl": "https://polyhaven.com/a/fern_02",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1057,14 +1057,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_frost_pine",
       "name": "Env Frost Pine",
       "category": "world",
-      "creator": "Poly Haven \u2014 Fir Sapling (fir_sapling) + Snowy Conifer",
+      "creator": "Poly Haven — Fir Sapling (fir_sapling) + Snowy Conifer",
       "sourceUrl": "https://polyhaven.com/a/fir_sapling",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1078,8 +1078,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_ice_cave_arch",
@@ -1099,14 +1099,14 @@
       "embeddedImages": 9,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_keep_gate",
       "name": "Env Keep Gate",
       "category": "world",
-      "creator": "Poly Haven \u2014 Modular Fort 01 + Castle Slate PBR",
+      "creator": "Poly Haven — Modular Fort 01 + Castle Slate PBR",
       "sourceUrl": "https://polyhaven.com/a/modular_fort_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1120,8 +1120,8 @@
       "embeddedImages": 12,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_keep_wall",
@@ -1141,8 +1141,8 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_nordic_cabin",
@@ -1162,14 +1162,14 @@
       "embeddedImages": 15,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_oath_shrine",
       "name": "Env Oath Shrine",
       "category": "world",
-      "creator": "Poly Haven \u2014 Gothic Statue (gothic_statue) + Stone Dais",
+      "creator": "Poly Haven — Gothic Statue (gothic_statue) + Stone Dais",
       "sourceUrl": "https://polyhaven.com/a/gothic_statue",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1183,14 +1183,14 @@
       "embeddedImages": 6,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_oathgrave_tomb",
       "name": "Env Oathgrave Tomb",
       "category": "world",
-      "creator": "Poly Haven \u2014 Gothic Statue + Medieval Blocks & Ice",
+      "creator": "Poly Haven — Gothic Statue + Medieval Blocks & Ice",
       "sourceUrl": "https://polyhaven.com/a/medieval_blocks_02",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1204,14 +1204,14 @@
       "embeddedImages": 18,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_rock_cliff",
       "name": "Env Rock Cliff",
       "category": "world",
-      "creator": "Poly Haven \u2014 Coastal Cliff 01 (coastal_cliff_01)",
+      "creator": "Poly Haven — Coastal Cliff 01 (coastal_cliff_01)",
       "sourceUrl": "https://polyhaven.com/a/coastal_cliff_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1225,14 +1225,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_rock_face",
       "name": "Env Rock Face",
       "category": "world",
-      "creator": "Poly Haven \u2014 Rock Face 01 (rock_face_01)",
+      "creator": "Poly Haven — Rock Face 01 (rock_face_01)",
       "sourceUrl": "https://polyhaven.com/a/rock_face_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1246,14 +1246,14 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_ruined_bridge",
       "name": "Env Ruined Bridge",
       "category": "world",
-      "creator": "Poly Haven \u2014 Modular Wooden Pier + Medieval Blocks",
+      "creator": "Poly Haven — Modular Wooden Pier + Medieval Blocks",
       "sourceUrl": "https://polyhaven.com/a/modular_wooden_pier",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1267,14 +1267,14 @@
       "embeddedImages": 12,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     },
     {
       "id": "env_tree_stump",
       "name": "Env Tree Stump",
       "category": "world",
-      "creator": "Poly Haven \u2014 Tree Stump 01 (tree_stump_01)",
+      "creator": "Poly Haven — Tree Stump 01 (tree_stump_01)",
       "sourceUrl": "https://polyhaven.com/a/tree_stump_01",
       "license": "CC0 1.0",
       "commercialUse": true,
@@ -1288,8 +1288,8 @@
       "embeddedImages": 3,
       "animationsCount": 0,
       "integrationStatus": "integrated",
-      "visualQaStatus": "approved",
-      "inspectedInGame": true
+      "visualQaStatus": "pending",
+      "inspectedInGame": false
     }
   ]
 }

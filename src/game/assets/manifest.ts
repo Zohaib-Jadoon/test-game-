@@ -69,9 +69,9 @@ const makeEntry = (
   triangleCount: extras.triangleCount ?? 0,
   textureSizes: extras.textureSizes ?? '512x512 / 256x256',
   integrationStatus: 'integrated',
-  visualQaStatus: 'approved',
-  inspectedInGame: true,
-  status: 'approved',
+  visualQaStatus: 'pending',
+  inspectedInGame: false,
+  status: 'pending',
 });
 
 export const EIDRATH_ASSET_MANIFEST: Record<string, AssetDefinition> = {
@@ -314,6 +314,9 @@ export async function loadEidrathAsset(assetId: string): Promise<LoadedAssetReco
       );
     });
     assetCache.set(assetId, pending);
+    const request = pending;
+    // Failed network loads must be retryable after reconnecting.
+    void request.catch(() => { if (assetCache.get(assetId) === request) assetCache.delete(assetId); });
   }
   return pending;
 }
@@ -337,8 +340,8 @@ export async function registerDevPreviewGlb(
           scene: gltf.scene,
           animations: gltf.animations ?? [],
         };
-        overrideAssetBuffers.set(assetId, rec);
-        resolve(rec);
+        overrideAssetBuffers.set(assetId, { ...rec, definition: { ...rec.definition, visualQaStatus: 'pending', inspectedInGame: false, status: 'pending' } });
+        resolve(overrideAssetBuffers.get(assetId)!);
       },
       (err) => reject(new Error(`Failed to parse dev GLB: ${String(err)}`)),
     );

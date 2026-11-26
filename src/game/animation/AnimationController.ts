@@ -68,6 +68,8 @@ export class AnimationController {
   private clips: Map<string, THREE.AnimationClip>;
   private actions = new Map<string, THREE.AnimationAction>();
   private currentKey = '';
+  private currentRequest = '';
+  private currentLoop = true;
   private currentAction: THREE.AnimationAction | null = null;
   private prevNormTime = 0;
   private firedThisLoop = new Set<string>();
@@ -134,7 +136,7 @@ export class AnimationController {
     const fadeSec = options.fadeSec ?? 0.16;
     const timeScale = options.timeScale ?? 1.0;
 
-    if (this.currentKey === key && !options.forceRestart && this.currentAction) {
+    if (this.currentKey === key && this.currentRequest === name.toLowerCase() && this.currentLoop === loop && !options.forceRestart && this.currentAction) {
       this.currentAction.setEffectiveTimeScale(timeScale);
       return;
     }
@@ -146,21 +148,23 @@ export class AnimationController {
       this.actions.set(key, nextAction);
     }
 
+    nextAction.reset();
     nextAction.enabled = true;
     nextAction.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     nextAction.clampWhenFinished = !loop;
     nextAction.setEffectiveTimeScale(timeScale);
     nextAction.setEffectiveWeight(1.0);
-    nextAction.reset();
 
     if (this.currentAction && this.currentAction !== nextAction) {
       nextAction.play();
-      this.currentAction.crossFadeTo(nextAction, fadeSec, true);
+      this.currentAction.crossFadeTo(nextAction, fadeSec, false);
     } else {
       nextAction.fadeIn(fadeSec).play();
     }
 
     this.currentKey = key;
+    this.currentRequest = name.toLowerCase();
+    this.currentLoop = loop;
     this.currentAction = nextAction;
     this.prevNormTime = 0;
     this.firedThisLoop.clear();
@@ -181,27 +185,36 @@ export class AnimationController {
     const dur = clip.duration;
     if (dur <= 0.01) return;
 
-    const norm = (this.currentAction.time % dur) / dur;
-    if (norm < this.prevNormTime) {
-      this.firedThisLoop.clear();
-    }
-
-    const specs = CLIP_EVENTS[this.currentKey];
-    if (specs) {
+    // LoopOnce clamps time at duration: modulo would turn the final frame into 0
+    // and could silently drop a late event or incorrectly replay earlier events.
+    const norm = this.currentLoop
+      ? (this.currentAction.time % dur) / dur
+      : Math.max(0, Math.min(1, this.currentAction.time / dur));
+    const specs = CLIP_EVENTS[this.currentKey] ?? [];
+    const emitThrough = (end: number) => {
       for (const ev of specs) {
         const key = `${ev.id}_${ev.normTime}`;
-        if (!this.firedThisLoop.has(key) && norm >= ev.normTime) {
+        if (!this.firedThisLoop.has(key) && end >= ev.normTime) {
           this.firedThisLoop.add(key);
-          this.callbacks.onEvent(ev.id);
+          this.callbacks.onEvent?.(ev.id);
         }
       }
+    };
+    if (this.currentLoop && norm < this.prevNormTime) {
+      emitThrough(1);
+      this.firedThisLoop.clear();
     }
+    emitThrough(norm);
     this.prevNormTime = norm;
   }
 
   public dispose(): void {
     this.mixer?.stopAllAction();
     this.actions.clear();
+    this.currentAction = null;
+    this.currentKey = '';
+    this.currentRequest = '';
+    this.firedThisLoop.clear();
   }
 }
 

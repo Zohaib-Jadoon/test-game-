@@ -52,6 +52,7 @@ export function startAttackAction(
   attackId: string,
   currentStamina: number,
   currentMana: number,
+  staminaMultiplier = 1,
 ): { started: boolean; staminaCost: number; manaCost: number; attack?: AttackDefinition } {
   const attack = ATTACKS[attackId];
   if (!attack) return { started: false, staminaCost: 0, manaCost: 0 };
@@ -65,7 +66,8 @@ export function startAttackAction(
     return { started: false, staminaCost: 0, manaCost: 0 };
   }
   const manaCost = attack.manaCost ?? 0;
-  if (currentStamina < attack.staminaCost || currentMana < manaCost) {
+  const staminaCost = Math.max(0, Math.round(attack.staminaCost * staminaMultiplier));
+  if (!Number.isFinite(staminaCost) || currentStamina < staminaCost || currentMana < manaCost) {
     return { started: false, staminaCost: 0, manaCost: 0 };
   }
   const instanceId = timeline.nextInstanceId++;
@@ -77,7 +79,7 @@ export function startAttackAction(
     elapsedMs: 0,
     alreadyHitIds: new Set<string>(),
   };
-  return { started: true, staminaCost: attack.staminaCost, manaCost, attack };
+  return { started: true, staminaCost, manaCost, attack };
 }
 
 export function startDodgeAction(

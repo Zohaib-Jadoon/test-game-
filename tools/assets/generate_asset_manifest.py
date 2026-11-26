@@ -1,14 +1,15 @@
 """
 Generate EIDRATH ASSET_MANIFEST.json and ASSET_CREDITS.md directly from
 built .glb binaries, PolyHaven HDRIs, textures, and normalized audio files.
-Run with --approve-inspected ONLY after live Chrome WebGL screenshots are inspected.
+Approval requires per-asset evidence for the exact GLB SHA-256; a batch flag is intentionally unsupported.
 """
 import argparse
+import hashlib
 import json
 import struct
 from pathlib import Path
 
-ROOT = Path(r"d:\MY Projects\Blender test")
+ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "public" / "assets" / "eidrath"
 LEDGER_PATH = ROOT / "_asset_cache" / "asset_download_ledger.json"
 AUDIO_CREDITS_PATH = ROOT / "_asset_cache" / "audio_raw" / "audio_credits.json"
@@ -66,8 +67,11 @@ def inspect_glb(glb_path: Path) -> dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--approve-inspected", action="store_true")
+    parser.add_argument("--qa-evidence", type=Path, help="JSON mapping asset ID to sha256, reviewer, evidence path, and verdict")
     args = parser.parse_args()
+    evidence = json.loads(args.qa_evidence.read_text("utf-8")) if args.qa_evidence else {}
+    if not isinstance(evidence, dict):
+        parser.error("QA evidence must be a JSON object keyed by asset ID")
 
     ledger = json.loads(LEDGER_PATH.read_text("utf-8")) if LEDGER_PATH.exists() else []
     audio_credits = json.loads(AUDIO_CREDITS_PATH.read_text("utf-8")) if AUDIO_CREDITS_PATH.exists() else []
@@ -91,7 +95,16 @@ def main():
             src_url = "https://polyhaven.com/textures"
             lic = "CC0 1.0"
 
-        qa_state = "approved" if args.approve_inspected else "pending"
+        review = evidence.get(aid, {})
+        sha256 = hashlib.sha256(glb.read_bytes()).hexdigest()
+        evidence_path = ROOT / review.get("evidence", "") if isinstance(review, dict) else ROOT
+        inspected = (
+            isinstance(review, dict) and review.get("sha256") == sha256
+            and isinstance(review.get("reviewer"), str) and bool(review["reviewer"].strip())
+            and evidence_path.is_file() and evidence_path.resolve().is_relative_to(ROOT)
+            and review.get("verdict") in ("approved", "rejected")
+        )
+        qa_state = review["verdict"] if inspected else "pending"
         entries.append({
             "id": aid,
             "name": aid.replace("_", " ").title(),
@@ -111,7 +124,9 @@ def main():
             "animationsCount": len(info["animations"]),
             "integrationStatus": "integrated",
             "visualQaStatus": qa_state,
-            "inspectedInGame": bool(args.approve_inspected),
+            "inspectedInGame": inspected,
+            "sha256": sha256,
+            "visualQaEvidence": review if inspected else None,
         })
 
     manifest_out = {
@@ -157,7 +172,7 @@ def main():
         f"*Ledger summary: {len(ledger)} downloaded/cached source files verified; {len(entries)} `.glb` runtime files ({manifest_out['totalGlbBytes'] / 1048576:.2f} MB total, {manifest_out['totalTriangles']:,} triangles).*",
     ])
     (ROOT / "ASSET_CREDITS.md").write_text("\n".join(lines) + "\n", "utf-8")
-    print(f"[MANIFEST] Wrote ASSET_MANIFEST.json ({len(entries)} GLBs, {manifest_out['totalGlbBytes']/1048576:.2f} MB, qa={args.approve_inspected}) & ASSET_CREDITS.md")
+    print(f"[MANIFEST] Wrote ASSET_MANIFEST.json ({len(entries)} GLBs, {manifest_out['totalGlbBytes']/1048576:.2f} MB, approved={sum(e['visualQaStatus'] == 'approved' for e in entries)}) & ASSET_CREDITS.md")
 
 
 if __name__ == "__main__":

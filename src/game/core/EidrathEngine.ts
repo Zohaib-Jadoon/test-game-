@@ -281,7 +281,8 @@ export class EidrathEngine {
   private abilityCooldowns: [number, number, number, number] = [0, 0, 0, 0];
   private timeline: CombatActorTimeline = createCombatTimeline();
   private inputBuffer = createCombatInputBuffer();
-  private chargingHeavy = false;
+  private heavyChargeButton: 0 | 2 | null = null;
+  private bufferedHeavyChargeSec = 0;
   private chargeStartTs = 0;
   private bossIntroPlayed = false;
   private hitReactions = new Map<string, { pitch: number; roll: number; timer: number }>();
@@ -500,7 +501,10 @@ export class EidrathEngine {
     this.save.player.y = getTerrainHeight(this.save.player.x, this.save.player.z);
     this.camYaw = this.save.player.yaw + Math.PI;
     this.cinematicCamera.yaw = this.camYaw;
-    this.cinematicCamera.setDialogueShot(null);
+    this.cinematicCamera.resetPose();
+    this.clearHeldInput();
+    this.playerVelX = this.playerVelY = this.playerVelZ = 0;
+    this.playerGrounded = true;
     this.timeline = createCombatTimeline();
     this.ascensionSec = 0;
     this.lockedEnemyId = null;
@@ -530,7 +534,7 @@ export class EidrathEngine {
     this.callbacks.onDialogueOpen(null);
     this.worldGroup.visible = false;
     this.titleGroup.visible = true;
-    this.keys.clear();
+    this.clearHeldInput();
     this.emitHudSnapshot();
   }
 
@@ -538,7 +542,7 @@ export class EidrathEngine {
     if (this.mode === 'title' || this.mode === 'dead') return;
     if (paused) {
       this.exitPointerLock();
-      this.keys.clear();
+      this.clearHeldInput();
       this.mode = menuOpen ? 'menu' : 'paused';
     } else {
       this.mode = this.activeDialogueNodeId ? 'dialogue' : 'playing';
@@ -547,13 +551,16 @@ export class EidrathEngine {
   }
 
   public manualSave(slotId: SaveSlotId): { ok: boolean; message: string } {
-    if (this.isInCombat() && this.mode === 'playing') {
+    if (this.isInCombat()) {
       return { ok: false, message: 'Cannot manually save while enemies are actively engaging you.' };
     }
-    this.save.slotId = slotId;
-    this.save.revision += 1;
-    this.save.updatedAt = new Date().toISOString();
-    writeSaveSlot(slotId, this.save);
+    const result = writeSaveSlot(slotId, this.save);
+    if (!result.ok || !result.save) {
+      const message = result.error ?? 'Save failed.';
+      this.notify(message);
+      return { ok: false, message };
+    }
+    this.save = result.save;
     this.callbacks.onSaveChanged(this.getSaveSnapshot());
     this.notify(`Saved to ${slotId.replace('_', ' ').toUpperCase()}.`);
     return { ok: true, message: `Game saved to ${slotId}.` };
@@ -561,9 +568,13 @@ export class EidrathEngine {
 
   private autosaveSafe(): void {
     if (this.timeline.state === 'dead') return;
-    this.save.revision += 1;
-    this.save.updatedAt = new Date().toISOString();
-    writeSaveSlot('autosave', this.save);
+    const result = writeSaveSlot('autosave', this.save);
+    if (!result.ok || !result.save) {
+      this.notify(result.error ?? 'Autosave failed.');
+      return;
+    }
+    this.save.revision = result.save.revision;
+    this.save.updatedAt = result.save.updatedAt;
     this.callbacks.onSaveChanged(this.getSaveSnapshot());
   }
 
@@ -1295,10 +1306,10 @@ export class EidrathEngine {
     action.reset().fadeIn(0.16).play();
   }
 
-  private setKaelenClip(name: string, loop = true, timeScale = 1.0): void {
+  private setKaelenClip(name: string, loop = true, timeScale = 1.0, forceRestart = false): void {
     if (this.kaelenCtrl) {
       this.kaelenClip = name;
-      this.kaelenCtrl.play(name, { loop, fadeSec: 0.14, timeScale });
+      this.kaelenCtrl.play(name, { loop, fadeSec: 0.14, timeScale, forceRestart });
       return;
     }
     if (this.kaelenClip === name) return;
@@ -1469,7 +1480,7 @@ export class EidrathEngine {
 
   private openDialogue(nodeId: string): void {
     this.exitPointerLock();
-    this.keys.clear();
+    this.clearHeldInput();
     this.activeDialogueNodeId = nodeId;
     this.mode = 'dialogue';
     // Activate cinematic two-shot dialogue camera toward nearest NPC or Lyra
@@ -1674,6 +1685,10 @@ export class EidrathEngine {
     this.save.player.hp = this.save.player.maxHp;
     this.save.player.stamina = this.save.player.maxStamina;
     this.save.player.mana = this.save.player.maxMana;
+    this.clearHeldInput();
+    this.playerVelX = this.playerVelY = this.playerVelZ = 0;
+    this.playerGrounded = true;
+    this.cinematicCamera.resetPose();
     this.timeline = createCombatTimeline();
     this.activeBossId = null;
 
@@ -1799,7 +1814,7 @@ export class EidrathEngine {
             ? 'light_2'
             : 'light_3';
 
-    const res = startAttackAction(this.timeline, attackId, this.save.player.stamina, this.save.player.mana);
+    const res = startAttackAction(this.timeline, attackId, this.save.player.stamina, this.save.player.mana, timing.staminaMult);
     if (!res.started || !res.attack) return;
     if (this.timeline.activeAction) {
       this.timeline.activeAction.attack = {
@@ -1811,13 +1826,13 @@ export class EidrathEngine {
       };
     }
 
-    this.save.player.stamina = Math.max(0, this.save.player.stamina - Math.round(res.staminaCost * timing.staminaMult));
+    this.save.player.stamina = Math.max(0, this.save.player.stamina - res.staminaCost);
     this.staminaRegenDelaySec = 0.7;
     this.comboStep = (this.comboStep + 1) % 3;
     this.comboResetSec = 1.25;
     this.faceLockOrCamera();
     this.combatVfx.clearWeaponTrail();
-    this.setKaelenClip(res.attack.animation, false, 1 / timing.windupMult);
+    this.setKaelenClip(res.attack.animation, false, 1 / timing.windupMult, true);
     this.audio.playSlash(timing.weightClass === 'heavy');
 
     if (res.attack.hitShape === 'projectile') {
@@ -1832,13 +1847,14 @@ export class EidrathEngine {
       this.timeline.state === 'active' ||
       this.timeline.state === 'recovery'
     ) {
+      this.bufferedHeavyChargeSec = chargeSec;
       queueCombatInput(this.inputBuffer, 'heavy_attack', performance.now());
       return;
     }
     this.ensureWeaponDrawn();
     const timing = getWeaponMovesetTiming(this.save.player.equipment.mainHand ?? '');
     const charged = computeChargedAttackMultiplier(chargeSec);
-    const res = startAttackAction(this.timeline, 'heavy_1', this.save.player.stamina, this.save.player.mana);
+    const res = startAttackAction(this.timeline, 'heavy_1', this.save.player.stamina, this.save.player.mana, timing.staminaMult);
     if (!res.started || !res.attack) return;
     if (this.timeline.activeAction) {
       this.timeline.activeAction.attack = {
@@ -1849,11 +1865,11 @@ export class EidrathEngine {
         recoveryMs: Math.round(res.attack.recoveryMs * timing.recoveryMult),
       };
     }
-    this.save.player.stamina = Math.max(0, this.save.player.stamina - Math.round(res.staminaCost * timing.staminaMult));
+    this.save.player.stamina = Math.max(0, this.save.player.stamina - res.staminaCost);
     this.staminaRegenDelaySec = 0.85;
     this.faceLockOrCamera();
     this.combatVfx.clearWeaponTrail();
-    this.setKaelenClip('HeavyAttack', false, 1 / timing.windupMult);
+    this.setKaelenClip('HeavyAttack', false, 1 / timing.windupMult, true);
     this.audio.playSlash(true);
     if (charged.isFullyCharged) {
       this.cinematicCamera.triggerZoomPulse(-3.2);
@@ -1870,7 +1886,7 @@ export class EidrathEngine {
     this.save.player.stamina = Math.max(0, this.save.player.stamina - res.staminaCost);
     this.staminaRegenDelaySec = 0.7;
     this.combatVfx.clearWeaponTrail();
-    this.setKaelenClip('Dodge', false);
+    this.setKaelenClip('Dodge', false, 1, true);
     this.audio.playFootstep(true, getSurfaceKindAt(this.save.player.x, this.save.player.z));
     this.combatVfx.spawnSnowDust(new THREE.Vector3(this.save.player.x, this.save.player.y, this.save.player.z), 6);
   }
@@ -1904,7 +1920,7 @@ export class EidrathEngine {
     this.staminaRegenDelaySec = 0.7;
     this.abilityCooldowns[slotIndex] = slotIndex === 2 ? 9.0 : 4.0;
     this.faceLockOrCamera();
-    this.setKaelenClip('Cast', false);
+    this.setKaelenClip('Cast', false, 1, true);
 
     const origin = new THREE.Vector3(this.save.player.x, this.save.player.y + 1.15, this.save.player.z);
     if (abilityId === 'ability_frost_lance') {
@@ -2075,6 +2091,10 @@ export class EidrathEngine {
       this.updateCamera(dt);
     }
 
+    if (this.mode === 'dead') {
+      this.kaelenCtrl?.update(dt);
+      if (!this.kaelenCtrl) this.kaelen?.mixer?.update(dt);
+    }
     this.realisticRenderer.render();
 
     this.hudThrottleAccum += dt;
@@ -2141,8 +2161,10 @@ export class EidrathEngine {
     advanceCombatTimeline(this.timeline, dtMs);
     if (this.timeline.state === 'idle' || this.timeline.state === 'locomotion') {
       const buffered = consumeBufferedInput(this.inputBuffer, performance.now());
+      const bufferedCharge = this.bufferedHeavyChargeSec;
+      this.bufferedHeavyChargeSec = 0;
       if (buffered === 'light_attack') this.tryPlayerLightAttack();
-      else if (buffered === 'heavy_attack') this.tryPlayerHeavyAttack();
+      else if (buffered === 'heavy_attack') this.tryPlayerHeavyAttack(bufferedCharge);
       else if (buffered === 'dodge') this.tryPlayerDodge();
     }
 
@@ -2293,7 +2315,7 @@ export class EidrathEngine {
           ? 3.1
           : wantSprint && mag > 0.1
             ? 8.2
-            : 5.2;
+            : this.walkToggled ? 2.8 : 5.2;
 
     if (wantSprint && mag > 0.1 && canMove && this.timeline.state !== 'dodge') {
       this.save.player.stamina = Math.max(0, this.save.player.stamina - 11 * dt);
@@ -2320,8 +2342,10 @@ export class EidrathEngine {
     this.playerVelX += (desiredVx - this.playerVelX) * Math.min(1, accel * dt);
     this.playerVelZ += (desiredVz - this.playerVelZ) * Math.min(1, accel * dt);
 
-    const nextX = this.save.player.x + this.playerVelX * dt;
-    const nextZ = this.save.player.z + this.playerVelZ * dt;
+    const previousX = this.save.player.x;
+    const previousZ = this.save.player.z;
+    const nextX = previousX + this.playerVelX * dt;
+    const nextZ = previousZ + this.playerVelZ * dt;
 
     // Terrain bounds + slope check + obstacle collision resolution
     let resolvedX = nextX;
@@ -2362,7 +2386,8 @@ export class EidrathEngine {
     }
 
     // Character facing: face locked target or movement direction
-    const speedHoriz = Math.hypot(this.playerVelX, this.playerVelZ);
+    // Derive pose speed from actual collision-resolved movement, not desired velocity.
+    const speedHoriz = Math.min(Math.hypot(this.playerVelX, this.playerVelZ), Math.hypot(resolvedX - previousX, resolvedZ - previousZ) / Math.max(dt, 0.001));
     const lockedTarget = this.lockedEnemyId
       ? this.enemies.find((e) => e.id === this.lockedEnemyId && e.aiState !== 'dead')
       : null;
@@ -2846,7 +2871,8 @@ export class EidrathEngine {
 
     if (this.save.player.hp <= 0) {
       this.timeline.state = 'dead';
-      this.setKaelenClip('Death', false);
+      this.clearHeldInput();
+      this.setKaelenClip('Death', false, 1, true);
       this.exitPointerLock();
       this.mode = 'dead';
       this.emitHudSnapshot();
@@ -3329,11 +3355,12 @@ export class EidrathEngine {
     if (e.target !== this.renderer.domElement) return;
     this.audio.unlock();
     if (e.button === 0) {
+      if (this.heavyChargeButton !== null) return;
       if (!this.pointerLocked && document.pointerLockElement !== this.renderer.domElement) {
         this.renderer.domElement.requestPointerLock?.();
       }
       if (e.shiftKey) {
-        this.chargingHeavy = true;
+        this.heavyChargeButton = 0;
         this.chargeStartTs = performance.now();
       } else {
         this.tryPlayerLightAttack();
@@ -3345,25 +3372,19 @@ export class EidrathEngine {
       this.rightMouseDrag = true;
       this.lastDragX = e.clientX;
       this.lastDragY = e.clientY;
-      this.chargingHeavy = true;
-      this.chargeStartTs = performance.now();
+      if (this.heavyChargeButton === null) {
+        this.heavyChargeButton = 2;
+        this.chargeStartTs = performance.now();
+      }
     }
   };
 
   private onMouseUp = (e: MouseEvent): void => {
-    if (e.button === 0 && this.chargingHeavy && e.shiftKey) {
-      const heldSec = (performance.now() - this.chargeStartTs) / 1000;
-      this.chargingHeavy = false;
-      this.tryPlayerHeavyAttack(heldSec);
-    }
-    if (e.button === 2) {
-      this.rightMouseDrag = false;
-      if (this.chargingHeavy) {
-        const heldSec = (performance.now() - this.chargeStartTs) / 1000;
-        this.chargingHeavy = false;
-        this.tryPlayerHeavyAttack(heldSec);
-      }
-    }
+    if (e.button === 2) this.rightMouseDrag = false;
+    if (this.heavyChargeButton !== e.button) return;
+    const heldSec = (performance.now() - this.chargeStartTs) / 1000;
+    this.heavyChargeButton = null;
+    if (this.mode === 'playing') this.tryPlayerHeavyAttack(heldSec);
   };
 
   private onMouseMove = (e: MouseEvent): void => {
@@ -3392,17 +3413,26 @@ export class EidrathEngine {
 
   private onPointerLockChange = (): void => {
     this.pointerLocked = document.pointerLockElement === this.renderer.domElement;
+    if (!this.pointerLocked) this.clearHeldInput();
     this.emitHudSnapshot();
   };
 
   private onWindowBlur = (): void => {
-    this.keys.clear();
-    this.rightMouseDrag = false;
-    releaseGuardAction(this.timeline);
+    this.clearHeldInput();
     if (this.mode === 'playing') {
       this.setPaused(true, false);
     }
   };
+
+  private clearHeldInput(): void {
+    this.keys.clear();
+    this.rightMouseDrag = false;
+    this.heavyChargeButton = null;
+    this.bufferedHeavyChargeSec = 0;
+    this.inputBuffer = createCombatInputBuffer();
+    this.touchMoveX = this.touchMoveY = 0;
+    releaseGuardAction(this.timeline);
+  }
 
   private exitPointerLock(): void {
     if (document.pointerLockElement === this.renderer.domElement) {
