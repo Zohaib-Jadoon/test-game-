@@ -1,0 +1,58 @@
+{
+  "sources": [
+    {
+      "id": "pine-forest",
+      "title": "Pine Forest",
+      "creator": "Poly Haven / Rob Tuytel and contributors",
+      "license": "CC0-1.0",
+      "source": "https://polyhaven.com/collections/pine_forest",
+      "download": "https://dl.polyhaven.org/file/ph-assets/Scenes/pine_forest.zip",
+      "use": "Artist-composed forest trail; title backdrop or approved playable forest patch. Bake materials and realize vegetation instances before GLB export."
+    },
+    {
+      "id": "medieval-village",
+      "title": "Medieval Village",
+      "creator": "Kless",
+      "license": "CC0-1.0",
+      "source": "https://blendswap.com/blend/13382",
+      "download": null,
+      "use": "Authored village scene; manual free download, inspect all textures and modern Blender compatibility. Adapt part of scene to Ravenhold, remove contemporary objects if any."
+    },
+    {
+      "id": "forest-river",
+      "title": "Forest",
+      "creator": "See source author",
+      "license": "CC0-1.0",
+      "source": "https://blendswap.com/blend/18922",
+      "download": null,
+      "use": "Forest/river scene candidate; source listing found, download availability not verified. Review before use."
+    },
+    {
+      "id": "ornate-war-hammer",
+      "title": "Ornate War Hammer",
+      "creator": "James Ray Cock / Ulan Cabanilla",
+      "license": "CC0-1.0",
+      "source": "https://polyhaven.com/a/ornate_war_hammer",
+      "download": null,
+      "use": "Worldshatter replacement, obtain 1K glTF from Poly Haven API."
+    },
+    {
+      "id": "ornate-medieval-mace",
+      "title": "Ornate Medieval Mace",
+      "creator": "Ulan Cabanilla",
+      "license": "CC0-1.0",
+      "source": "https://polyhaven.com/a/ornate_medieval_mace",
+      "download": null,
+      "use": "Additional weapon candidate, not automatically mapped to an existing item."
+    },
+    {
+      "id": "ornate-medieval-dagger",
+      "title": "Ornate Medieval Dagger",
+      "creator": "Sofia Pahaoja",
+      "license": "CC0-1.0",
+      "source": "https://polyhaven.com/a/ornate_medieval_dagger",
+      "download": null,
+      "use": "Dagger candidate; do not change Torment Links moveset without deliberate adaptation."
+    }
+  ]
+}
