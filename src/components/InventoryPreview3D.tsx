@@ -95,8 +95,10 @@ export const InventoryPreview3D: React.FC<InventoryPreview3DProps> = ({ mainHand
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafId);
+      mixer?.stopAllAction();
       disposeObjectTree(scene);
       renderer.dispose();
+      renderer.domElement.remove();
     };
   }, [mainHandId, offHandId]);
 

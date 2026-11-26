@@ -15,7 +15,7 @@ from pathlib import Path
 
 import requests
 
-ROOT = Path(r"d:\MY Projects\Blender test")
+ROOT = Path(__file__).resolve().parents[2]
 CACHE_AUDIO = ROOT / "_asset_cache" / "audio_raw"
 OUT_AUDIO = ROOT / "public" / "assets" / "eidrath" / "audio"
 

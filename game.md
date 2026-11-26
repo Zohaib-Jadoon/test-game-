@@ -79,3 +79,7 @@ All primitive geometric placeholders were replaced with realistic assets generat
 | Menus (Map / Inv / Skills / Journal) | `M` / `I` / `K` / `J` / `Esc`                                 | Pauses simulation cleanly                                   |
 
 Mobile viewports render an on-screen thumbstick and touch buttons (`Attack`, `Heavy`, `Guard`, `Dodge`, `Interact`, `Lock-On`, `Skills`).
+
+## 4. Scope and acceptance update (ChatGPT shift, 2026-11-26)
+
+This describes the current Frostheim vertical slice, not the full seven-kingdom campaign. Previous QA reports describe earlier commits and do not imply user acceptance. Visual approval is reset to pending; use per-asset hash-bound in-game evidence and `cowork.md`. The original story remains the target: Frostheim, Valtherion, Sylvaris, Ashkar, Solmara, Mournveil, Aetherion; seven gods, five endings, open-world quests and classless progression. No paid tools or assets are authorized. Native-engine evaluation is authorized; validate a playable local benchmark before removing the existing reference implementation.

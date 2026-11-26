@@ -14,7 +14,7 @@ from pathlib import Path
 import bpy
 from mathutils import Euler, Matrix, Quaternion, Vector
 
-ROOT = Path(r"d:\MY Projects\Blender test")
+ROOT = Path(__file__).resolve().parents[2]
 TEX_DIR = ROOT / "public" / "assets" / "eidrath" / "textures"
 TEX_CACHE = ROOT / "_asset_cache" / "tex512"
 MOCAP_DIR = ROOT / "_asset_cache" / "mocap_refs"

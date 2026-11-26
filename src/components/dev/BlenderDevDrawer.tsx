@@ -198,7 +198,7 @@ export const BlenderDevDrawer: React.FC<BlenderDevDrawerProps> = ({ onClose, onP
                     <td className="p-2 uppercase text-[10px]">{a.category}</td>
                     <td className="p-2 font-mono">{a.expectedHeightM.toFixed(2)}m</td>
                     <td className="p-2 font-mono">{a.animations.length}</td>
-                    <td className="p-2 text-[#6D9CB6] uppercase text-[10px]">{a.status}</td>
+                    <td className="p-2 text-[#6D9CB6] uppercase text-[10px]">{a.visualQaStatus}</td>
                   </tr>
                 ))}
               </tbody>

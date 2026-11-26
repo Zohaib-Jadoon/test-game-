@@ -97,7 +97,8 @@ def main():
 
         review = evidence.get(aid, {})
         sha256 = hashlib.sha256(glb.read_bytes()).hexdigest()
-        evidence_path = ROOT / review.get("evidence", "") if isinstance(review, dict) else ROOT
+        evidence_name = review.get("evidence") if isinstance(review, dict) else None
+        evidence_path = ROOT / evidence_name if isinstance(evidence_name, str) and evidence_name else ROOT
         inspected = (
             isinstance(review, dict) and review.get("sha256") == sha256
             and isinstance(review.get("reviewer"), str) and bool(review["reviewer"].strip())
@@ -171,7 +172,10 @@ def main():
         "",
         f"*Ledger summary: {len(ledger)} downloaded/cached source files verified; {len(entries)} `.glb` runtime files ({manifest_out['totalGlbBytes'] / 1048576:.2f} MB total, {manifest_out['totalTriangles']:,} triangles).*",
     ])
-    (ROOT / "ASSET_CREDITS.md").write_text("\n".join(lines) + "\n", "utf-8")
+    if AUDIO_CREDITS_PATH.exists() and LEDGER_PATH.exists():
+        (ROOT / "ASSET_CREDITS.md").write_text("\n".join(lines) + "\n", "utf-8")
+    else:
+        print("[MANIFEST] Source cache absent: preserved existing ASSET_CREDITS.md")
     print(f"[MANIFEST] Wrote ASSET_MANIFEST.json ({len(entries)} GLBs, {manifest_out['totalGlbBytes']/1048576:.2f} MB, approved={sum(e['visualQaStatus'] == 'approved' for e in entries)}) & ASSET_CREDITS.md")
 
 

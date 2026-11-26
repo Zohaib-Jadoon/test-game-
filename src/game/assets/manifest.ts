@@ -40,7 +40,7 @@ const qaRecords = new Map((manifestEvidence.assets as QaRecord[]).map((entry) =>
 function reviewedStatus(id: string): VisualQaStatus {
   const qa = qaRecords.get(id);
   const evidence = qa?.visualQaEvidence;
-  if (!qa?.inspectedInGame || !qa.sha256 || evidence?.sha256 !== qa.sha256 || !evidence.reviewer || !evidence.evidence || evidence.verdict !== qa.visualQaStatus) return 'pending';
+  if (!qa?.inspectedInGame || !qa.sha256 || !evidence || evidence.sha256 !== qa.sha256 || !evidence.reviewer || !evidence.evidence || evidence.verdict !== qa.visualQaStatus) return 'pending';
   return qa.visualQaStatus === 'approved' || qa.visualQaStatus === 'rejected' ? qa.visualQaStatus : 'pending';
 }
 

@@ -8,7 +8,9 @@ Never bypasses logins, paywalls, or non-commercial licenses.
 import hashlib
 import io
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -17,11 +19,11 @@ from urllib.parse import urlparse
 
 import requests
 
-ROOT = Path(r"d:\MY Projects\Blender test")
+ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / "_asset_cache"
 PUBLIC_TEX = ROOT / "public" / "assets" / "eidrath" / "textures"
 PUBLIC_HDRI = ROOT / "public" / "assets" / "eidrath" / "hdri"
-BLENDER_EXE = r"C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
+BLENDER_EXE = os.environ.get("EIDRATH_BLENDER_EXE") or shutil.which("blender") or r"C:\Program Files\Blender Foundation\Blender 5.3\blender.exe"
 
 for d in (CACHE, CACHE / "mpfb2", CACHE / "polyhaven_models", CACHE / "ambientcg", CACHE / "mocap_refs", PUBLIC_TEX, PUBLIC_HDRI):
     d.mkdir(parents=True, exist_ok=True)

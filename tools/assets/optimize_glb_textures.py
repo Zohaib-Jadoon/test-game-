@@ -10,7 +10,7 @@ import struct
 from pathlib import Path
 from PIL import Image
 
-ROOT = Path(r"d:\MY Projects\Blender test")
+ROOT = Path(__file__).resolve().parents[2]
 ASSETS_DIR = ROOT / "public" / "assets" / "eidrath"
 
 

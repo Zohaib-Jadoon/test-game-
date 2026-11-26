@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(r"d:\MY Projects\Blender test")
+ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "art" / "qa"
 AFTER_DIR = OUT_DIR / "after"
 REC_DIR = OUT_DIR / "recordings"
@@ -22,6 +22,8 @@ for d in (OUT_DIR, AFTER_DIR, REC_DIR):
 METRICS_OUT.parent.mkdir(parents=True, exist_ok=True)
 
 BASE_URL = os.environ.get("EIDRATH_QA_URL", "http://127.0.0.1:3000")
+RECORD_VIDEO = os.environ.get("EIDRATH_QA_RECORD", "1") != "0"
+HEADLESS = os.environ.get("EIDRATH_QA_HEADLESS", "1") != "0"
 
 
 def launch_browser(p):
@@ -34,10 +36,10 @@ def launch_browser(p):
     chrome_path = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
     edge_path = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
     if chrome_path.exists():
-        return p.chromium.launch(executable_path=str(chrome_path), headless=True, args=args), "Chrome"
+        return p.chromium.launch(executable_path=str(chrome_path), headless=HEADLESS, args=args), "Chrome"
     if edge_path.exists():
-        return p.chromium.launch(executable_path=str(edge_path), headless=True, args=args), "Edge"
-    return p.chromium.launch(headless=True, args=args), "Chromium"
+        return p.chromium.launch(executable_path=str(edge_path), headless=HEADLESS, args=args), "Edge"
+    return p.chromium.launch(headless=HEADLESS, args=args), "Chromium"
 
 
 def snap(page, filename: str) -> None:
@@ -81,14 +83,14 @@ def main():
 
     with sync_playwright() as p:
         browser, browser_name = launch_browser(p)
-        context = browser.new_context(
-            viewport={"width": 1280, "height": 720},
-            record_video_dir=str(REC_DIR),
-            record_video_size={"width": 1280, "height": 720},
-        )
+        context_options = {"viewport": {"width": 1280, "height": 720}}
+        if RECORD_VIDEO:
+            context_options.update(record_video_dir=str(REC_DIR), record_video_size={"width": 1280, "height": 720})
+        context = browser.new_context(**context_options)
         page = context.new_page()
 
         page.on("pageerror", lambda err: page_errors.append(str(err)))
+        page.on("requestfailed", lambda req: failed_requests.append(f"{req.failure} {req.url}") if req.failure != "net::ERR_ABORTED" else None)
         page.on(
             "console",
             lambda msg: console_errors.append(msg.text)
@@ -285,6 +287,9 @@ def main():
     recordings = sorted(REC_DIR.glob("*.webm"))
     result = {
         "browser": browser_name,
+        "headless": HEADLESS,
+        "recordVideo": RECORD_VIDEO,
+        "benchmarkCaveat": "requestAnimationFrame cadence, not GPU-only timing; record-off results are preferred",
         "metrics": metrics,
         "console_errors": console_errors,
         "page_errors": page_errors,

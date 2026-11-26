@@ -34,3 +34,7 @@ In strict compliance with licensing and authentication rules (no credential bypa
 - **Fab / BlenderKit Pro**: Account login / paid tiers skipped cleanly without workarounds.
 
 *Ledger summary: 190 downloaded/cached source files verified; 60 `.glb` runtime files (46.73 MB total, 823,338 triangles).*
+
+## 5. Cowork licensing verification status (2026-11-26)
+
+Previous credits are preserved as the original author's provenance claims, not independent legal verification. In particular, the MIT license of Three.js code is not by itself proof that every third-party example model and embedded animation is MIT-licensed for standalone redistribution. Verify individual author/license metadata for Soldier.glb, Xbot.glb and Michelle.glb and their retargeted derivatives. Adobe Mixamo FAQ: https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html . Free game use does not automatically permit redistribution of raw source assets. Keep questionable assets out of release/public source distributions until their specific rights are established; prefer CC0 or clearly permissive originals. No new third-party binary assets were added during this shift.
